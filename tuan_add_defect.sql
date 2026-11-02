@@ -1,0 +1,1 @@
+SELECT * FROM defect ORDER BY id DESC LIMIT 1 ;
