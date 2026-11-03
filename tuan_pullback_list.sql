@@ -21,6 +21,12 @@ arrival_date
 FROM inbound  
 WHERE current_action IS NULL AND region <> 'CONT'
 AND purchase_order_num IN (
+4700530395,
+4700530458,
+4700530546,
+4700530738,
+4700530874
+
 
 
 

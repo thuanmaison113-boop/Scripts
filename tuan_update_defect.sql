@@ -7,5 +7,3 @@ SET
     brand_name = (SELECT i.brand_name FROM inbound i WHERE i.purchase_order_num = defect.purchase_order_num)
 WHERE 
 shop_name IS NULL;
-
-
