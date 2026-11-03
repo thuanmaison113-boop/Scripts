@@ -1,3 +1,2 @@
 select *
-from outbound
-where stock_transfer_order_num = 4500235631
+from stocktaking s  where document_date like "2026-09%"
