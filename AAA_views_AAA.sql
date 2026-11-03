@@ -1,5 +1,6 @@
 CREATE VIEW AAA_inbound_last_gr_date AS
 SELECT
+i.id,
 i.shop_code,
 i.shop_name,
 i.brand_name,

@@ -452,7 +452,7 @@ CREATE VIEW vw_check_plan_closed_day AS
  GROUP BY p.source, p.plan_type, p.brand_code, p.delivery_date;
 
 
-CREATE VIEW vw_inbound_expected_arrival_unresolved AS
+CREATE VIEW vw_check_inbound_expected_arrival_unresolved AS
 SELECT activity, shop_region, brand_name, COUNT(*) AS rows_unscheduled
 FROM vw_pbi_inbound_expected_arrival
 WHERE arrival_date IS NULL
