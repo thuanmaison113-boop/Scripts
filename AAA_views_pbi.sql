@@ -36,29 +36,50 @@ CROSS JOIN std s
 GROUP BY c.job, c.arrival_date, s.days_20, s.days_40, s.staff_per_job;
 
 CREATE VIEW vw_pbi_cont_job_daily AS
-WITH RECURSIVE cal(job_key, job, handling_days, hc, d, n) AS (
-    SELECT job_key, job, handling_days, staff_required, arrival_date, 0
-    FROM vw_pbi_cont_job
-    WHERE handling_days > 0
-    UNION ALL
-    SELECT job_key, job, handling_days, hc, DATE(d, '+1 day'), n + 1
-    FROM cal
-    WHERE n < handling_days * 2 + 14
+WITH RECURSIVE
+wd AS (                -- working days: Mon–Sat, minus date_exception
+    SELECT d.Date, ROW_NUMBER() OVER (ORDER BY d.Date) AS wd_no
+    FROM date_tb d
+    WHERE d.Date BETWEEN DATE('now','-180 days') AND DATE('now','+365 days')
+      AND d.Weekend = 'Weekday'
+      AND NOT EXISTS (SELECT 1 FROM date_exception e
+                      WHERE d.Date BETWEEN e.start_date AND e.end_date)
 ),
-working AS (
-    SELECT
-        job_key, job, handling_days, hc, d AS work_date,
-        ROW_NUMBER() OVER (PARTITION BY job_key ORDER BY d) AS day_no
-    FROM cal
-    WHERE strftime('%w', d) <> '0'
-      AND NOT EXISTS (
-          SELECT 1 FROM date_exception de
-          WHERE cal.d BETWEEN DATE(de.start_date) AND DATE(de.end_date)
-      )
-)
-SELECT job_key, job, work_date, day_no, handling_days, hc
-FROM working
-WHERE day_no <= handling_days;
+jobs AS (              -- one row per job, in arrival order
+    SELECT j.job_key, j.job, j.arrival_date,
+           CAST(j.handling_days AS INTEGER) AS hd,
+           j.staff_required                 AS hc,
+           j.cont_20_qty, j.cont_40_qty,
+           (SELECT MIN(wd_no) FROM wd WHERE wd.Date >= j.arrival_date) AS arr_no,
+           ROW_NUMBER() OVER (ORDER BY j.arrival_date, j.job)          AS seq
+    FROM vw_pbi_cont_job j
+    WHERE j.handling_days > 0
+      AND j.arrival_date >= DATE('now','-180 days')
+),
+q(seq, start_no, end_no) AS (   -- one crew: a job starts on arrival or after the previous job ends
+    SELECT seq, arr_no, arr_no + hd - 1 FROM jobs WHERE seq = 1
+    UNION ALL
+    SELECT j.seq,
+           MAX(j.arr_no, q.end_no + 1),
+           MAX(j.arr_no, q.end_no + 1) + j.hd - 1
+    FROM q JOIN jobs j ON j.seq = q.seq + 1
+),
+offs(k) AS (SELECT 0 UNION ALL SELECT k + 1 FROM offs WHERE k < 30)
+SELECT
+    j.job_key,
+    j.job,
+    w.Date               AS work_date,
+    o.k + 1              AS day_no,
+    j.hd                 AS handling_days,
+    j.hc,
+    j.arrival_date,
+    q.start_no - j.arr_no AS wait_days,   -- working days the job waited for the crew
+    j.cont_20_qty,                        -- containers in the job (same value on every day of the job)
+    j.cont_40_qty
+FROM q
+JOIN jobs j ON j.seq = q.seq
+JOIN offs o ON o.k <= q.end_no - q.start_no
+JOIN wd   w ON w.wd_no = q.start_no + o.k;
 
 CREATE VIEW vw_pbi_daily_workload AS
 WITH wd AS (
@@ -143,12 +164,13 @@ SELECT 'Taras' AS site, article_number, article_type, brand,
        unrestricted, snapshot_date
 FROM soh_taras WHERE brand <> '';
 
+DROP VIEW IF EXISTS vw_pbi_inbound_expected_arrival;
 CREATE VIEW vw_pbi_inbound_expected_arrival AS
 WITH wd AS (
     SELECT d.Date, d.Day_Of_Week_Number,
            ROW_NUMBER() OVER (ORDER BY d.Date) AS wd_no
     FROM date_tb d
-    WHERE d.Date BETWEEN DATE('now','-90 days') AND DATE('now','+365 days')
+    WHERE d.Date BETWEEN DATE('now','-90 days') AND DATE('now','+365 days')  -- only the window needed (speed)
       AND d.Weekend = 'Weekday'
       AND NOT EXISTS (SELECT 1 FROM date_exception e
                       WHERE d.Date BETWEEN e.start_date AND e.end_date)
@@ -164,9 +186,9 @@ base AS (
     LEFT JOIN shop     s ON s.shop_code   = i.shop_code
     LEFT JOIN province p ON p.province_id = s.province_id
     LEFT JOIN brand    b ON b.brand_name  = i.brand_name
-    WHERE COALESCE(i.region, '') <> 'CONT'
-      AND (COALESCE(i.arrival_date, i.good_receipt_date) IS NULL
-           OR COALESCE(i.arrival_date, i.good_receipt_date) >= DATE('now'))
+    WHERE COALESCE(i.region, '') <> 'CONT'   -- pullback only; CONT has its own chain
+      AND (COALESCE(i.arrival_date, i.good_receipt_date) IS NULL          -- still pending (incl. overdue)
+           OR COALESCE(i.arrival_date, i.good_receipt_date) >= DATE('now')) -- or arrived today
 ),
 calc AS (
     SELECT base.*,
@@ -186,7 +208,8 @@ calc AS (
 )
 SELECT calc.*,
     CASE WHEN actual_date IS NOT NULL             THEN actual_date
-         WHEN expected_arrival_date < DATE('now') THEN DATE('now')
+         WHEN expected_arrival_date < DATE('now')
+              THEN (SELECT MIN(w.Date) FROM wd w WHERE w.Date >= DATE('now'))   -- overdue -> today, or next working day if today is off
          ELSE expected_arrival_date END           AS workload_date,
     CASE WHEN actual_date IS NOT NULL             THEN 'Actual'
          WHEN expected_arrival_date < DATE('now') THEN 'Overdue'
@@ -196,6 +219,10 @@ SELECT calc.*,
     COALESCE(input_standard,0) + COALESCE(input_taras_defect,0)
       + COALESCE(input_visual_merchandising,0)    AS workload_qty
 FROM calc;
+
+
+
+
 
 CREATE VIEW vw_pbi_cont_plan AS
 SELECT
@@ -450,7 +477,6 @@ CREATE VIEW vw_check_plan_closed_day AS
         OR EXISTS (SELECT 1 FROM date_exception de
                    WHERE p.delivery_date BETWEEN de.start_date AND de.end_date))
  GROUP BY p.source, p.plan_type, p.brand_code, p.delivery_date;
-
 
 CREATE VIEW vw_check_inbound_expected_arrival_unresolved AS
 SELECT activity, shop_region, brand_name, COUNT(*) AS rows_unscheduled

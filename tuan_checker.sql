@@ -14,11 +14,11 @@ WHERE i.shop_code = '1025' ORDER BY d.id DESC;
 
 -- defect by style code1
 select * from defect 
-where style_code = "PM1-46600232"
+where style_code = "PW1-65110093"
 order by id desc
 
 
 
 -- item list by style code
 select * from item_list
-where style_code = "CK2-30782756"
+where style_code = "PW1-65110093"
