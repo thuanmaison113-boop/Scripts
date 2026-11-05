@@ -1,3 +1,3 @@
 select *
 from outbound o 
-where stock_transfer_order_num = 4500237600
+where delivery_order_num  = 80241363

@@ -21,4 +21,4 @@ order by id desc
 
 -- item list by style code
 select * from item_list
-where style_code = "PW1-65110093"
+where style_code = "CK2-50782952-A"
