@@ -541,7 +541,15 @@ CREATE TABLE outbound_groupx (
     FOREIGN KEY (shop_code) REFERENCES shop(shop_code)
 );
 CREATE INDEX idx_groupx_shop_code   ON outbound_groupx(shop_code);
-
+CREATE TRIGGER outbound_groupx_add_shop_name_brand
+AFTER INSERT ON outbound_groupx
+FOR EACH ROW
+BEGIN
+    UPDATE outbound_groupx
+    SET shop_name = (SELECT s.shop_name FROM shop s WHERE s.shop_code = NEW.shop_code),
+        brand = (SELECT s.brand FROM shop s WHERE s.shop_code = NEW.shop_code)
+    WHERE rowid = NEW.rowid;
+END;
 
 
 CREATE TABLE outbound_include (

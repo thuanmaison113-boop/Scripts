@@ -1,4 +1,3 @@
-
 CREATE VIEW vw_pbi_cont_job AS
 WITH std AS (
     SELECT
@@ -81,6 +80,7 @@ JOIN jobs j ON j.seq = q.seq
 JOIN offs o ON o.k <= q.end_no - q.start_no
 JOIN wd   w ON w.wd_no = q.start_no + o.k;
 
+DROP VIEW IF EXISTS vw_pbi_daily_workload;
 CREATE VIEW vw_pbi_daily_workload AS
 WITH wd AS (
     SELECT d.Date, ROW_NUMBER() OVER (ORDER BY d.Date) AS wd_no
@@ -97,7 +97,10 @@ std AS (
 ),
 ob AS (
     SELECT o.id, o.brand_name, o.product_qty AS qty,
-        (SELECT MIN(wd_no) FROM wd WHERE wd.Date >= COALESCE(o.order_date, o.delivery_date)) AS start_no,
+        (SELECT MIN(wd_no) FROM wd
+         WHERE wd.Date >= CASE WHEN COALESCE(o.order_date, o.delivery_date) < DATE('now')
+                               THEN DATE('now')
+                               ELSE COALESCE(o.order_date, o.delivery_date) END) AS start_no,
         (SELECT MAX(wd_no) FROM wd WHERE wd.Date <= o.delivery_date)                         AS end_no
     FROM outbound o
     WHERE o.delivery_date >= DATE('now') AND COALESCE(o.product_qty, 0) > 0
@@ -121,21 +124,76 @@ ob_days AS (              -- one row per order per pick day (equality join, no r
     JOIN offs o ON o.k <= w.end_no - w.start_no
     JOIN wd   d ON d.wd_no = w.start_no + o.k
 ),
-src AS (
-    SELECT workload_date AS work_date, brand_name, 'Pullback' AS activity,
-           arrival_date_status AS status, workload_qty AS qty
+pb AS (            -- pullback real work, read once
+    SELECT workload_date, brand_name, arrival_date_status, workload_qty
     FROM vw_pbi_inbound_expected_arrival
     WHERE workload_date IS NOT NULL
+),
+committed AS (     -- real work: expected/actual pullback + existing outbound orders
+    SELECT workload_date AS work_date, brand_name, 'Pullback' AS activity,
+           arrival_date_status AS status, workload_qty AS qty
+    FROM pb
     UNION ALL
     SELECT work_date, brand_name, 'Outbound', 'Order',
            qty / cnt + CASE WHEN rn <= qty % cnt THEN 1 ELSE 0 END
     FROM ob_days
+),
+cutoff AS (        -- per brand + activity: last date with real data (at least today)
+    SELECT UPPER(TRIM(brand_name)) AS brand_key, 'Outbound' AS activity,
+           MAX(MAX(delivery_date), DATE('now')) AS last_real
+    FROM outbound
+    WHERE delivery_date >= DATE('now') AND COALESCE(product_qty, 0) > 0
+    GROUP BY UPPER(TRIM(brand_name))
+    UNION ALL
+    SELECT UPPER(TRIM(brand_name)), 'Pullback',
+           MAX(MAX(workload_date), DATE('now'))
+    FROM pb
+    GROUP BY UPPER(TRIM(brand_name))
+),
+real_day AS (      -- real qty per brand + activity + date (outbound by delivery date, not pick day)
+    SELECT UPPER(TRIM(brand_name)) AS brand_key, 'Outbound' AS activity,
+           delivery_date AS d, SUM(product_qty) AS qty
+    FROM outbound
+    WHERE delivery_date > DATE('now') AND COALESCE(product_qty, 0) > 0
+    GROUP BY 1, 3
+    UNION ALL
+    SELECT UPPER(TRIM(brand_name)), 'Pullback', workload_date, SUM(workload_qty)
+    FROM pb
+    WHERE workload_date > DATE('now')
+    GROUP BY 1, 3
+),
+plan_day AS (      -- plan per brand + activity + date
+    SELECT UPPER(TRIM(brand_name)) AS brand_key, brand_name,
+           CASE plan_type WHEN 'outbound' THEN 'Outbound' ELSE 'Pullback' END AS activity,
+           delivery_date AS d, SUM(qty) AS qty
+    FROM vw_pbi_plan_final
+    WHERE plan_type IN ('outbound', 'pullback')
+      AND delivery_date > DATE('now')
+      AND delivery_date <= DATE('now', '+365 days')
+    GROUP BY 1, 2, 3, 4
+),
+planned AS (       -- after the brand's real data: full plan; up to it (from tomorrow): top-up = plan - real
+    SELECT p.d AS work_date, p.brand_name, p.activity, 'Plan' AS status,
+           CASE WHEN p.d > COALESCE(c.last_real, DATE('now')) THEN p.qty
+                ELSE p.qty - COALESCE(r.qty, 0) END AS qty
+    FROM plan_day p
+    LEFT JOIN cutoff c   ON c.brand_key = p.brand_key AND c.activity = p.activity
+    LEFT JOIN real_day r ON r.brand_key = p.brand_key AND r.activity = p.activity AND r.d = p.d
+    WHERE CASE WHEN p.d > COALESCE(c.last_real, DATE('now')) THEN p.qty
+               ELSE p.qty - COALESCE(r.qty, 0) END > 0
+),
+src AS (
+    SELECT * FROM committed
+    UNION ALL
+    SELECT * FROM planned
 )
 SELECT work_date, brand_name, activity, status, SUM(qty) AS qty
 FROM src
 WHERE work_date >= DATE('now')   -- forward-looking only
 GROUP BY work_date, brand_name, activity, status
 HAVING SUM(qty) <> 0;
+
+
 
 CREATE VIEW vw_pbi_soh_capacity_base AS
 SELECT
