@@ -1,3 +1,6 @@
+
+
+
 CREATE VIEW vw_pbi_cont_job AS
 WITH std AS (
     SELECT
@@ -80,6 +83,10 @@ JOIN jobs j ON j.seq = q.seq
 JOIN offs o ON o.k <= q.end_no - q.start_no
 JOIN wd   w ON w.wd_no = q.start_no + o.k;
 
+
+
+
+
 DROP VIEW IF EXISTS vw_pbi_daily_workload;
 CREATE VIEW vw_pbi_daily_workload AS
 WITH wd AS (
@@ -90,39 +97,28 @@ WITH wd AS (
       AND NOT EXISTS (SELECT 1 FROM date_exception e
                       WHERE d.Date BETWEEN e.start_date AND e.end_date)
 ),
+today_wd AS (      -- working-day number of today (or the next working day)
+    SELECT MIN(wd_no) AS n FROM wd WHERE Date >= DATE('now')
+),
+next_wd AS (       -- first working day after today (day 1 of plan; today stays real only)
+    SELECT MIN(wd_no) AS n FROM wd WHERE Date > DATE('now')
+),
 std AS (
     SELECT COALESCE(MAX(CASE WHEN standard_code = 'outbound_max_pick_days'
                              THEN standard_value END), 3) AS max_pick_days
     FROM standard
 ),
-ob AS (
-    SELECT o.id, o.brand_name, o.product_qty AS qty,
-        (SELECT MIN(wd_no) FROM wd
-         WHERE wd.Date >= CASE WHEN COALESCE(o.order_date, o.delivery_date) < DATE('now')
-                               THEN DATE('now')
-                               ELSE COALESCE(o.order_date, o.delivery_date) END) AS start_no,
-        (SELECT MAX(wd_no) FROM wd WHERE wd.Date <= o.delivery_date)                         AS end_no
-    FROM outbound o
-    WHERE o.delivery_date >= DATE('now') AND COALESCE(o.product_qty, 0) > 0
-),
-ob_win AS (
-    SELECT id, brand_name, qty, end_no,
-           MAX(MIN(start_no, end_no), end_no - (SELECT max_pick_days FROM std) + 1) AS start_no
-    FROM ob
-    WHERE end_no IS NOT NULL
-),
-offs(k) AS (              -- 0 .. max_pick_days-1
+offs(k) AS (       -- 0 .. max_pick_days-1
     SELECT 0
     UNION ALL
     SELECT k + 1 FROM offs WHERE k + 1 < (SELECT max_pick_days FROM std)
 ),
-ob_days AS (              -- one row per order per pick day (equality join, no range scan)
-    SELECT w.id, w.brand_name, w.qty, d.Date AS work_date,
-           o.k + 1                     AS rn,
-           w.end_no - w.start_no + 1   AS cnt
-    FROM ob_win w
-    JOIN offs o ON o.k <= w.end_no - w.start_no
-    JOIN wd   d ON d.wd_no = w.start_no + o.k
+ob AS (            -- real outbound orders: one work day = last working day on/before delivery (not before today)
+    SELECT o.brand_name, o.product_qty AS qty,
+           MAX((SELECT MAX(wd_no) FROM wd WHERE wd.Date <= o.delivery_date),
+               (SELECT n FROM today_wd)) AS work_no
+    FROM outbound o
+    WHERE o.delivery_date >= DATE('now') AND COALESCE(o.product_qty, 0) > 0
 ),
 pb AS (            -- pullback real work, read once
     SELECT workload_date, brand_name, arrival_date_status, workload_qty
@@ -134,9 +130,9 @@ committed AS (     -- real work: expected/actual pullback + existing outbound or
            arrival_date_status AS status, workload_qty AS qty
     FROM pb
     UNION ALL
-    SELECT work_date, brand_name, 'Outbound', 'Order',
-           qty / cnt + CASE WHEN rn <= qty % cnt THEN 1 ELSE 0 END
-    FROM ob_days
+    SELECT d.Date, ob.brand_name, 'Outbound', 'Order', ob.qty
+    FROM ob
+    JOIN wd d ON d.wd_no = ob.work_no
 ),
 cutoff AS (        -- per brand + activity: last date with real data (at least today)
     SELECT UPPER(TRIM(brand_name)) AS brand_key, 'Outbound' AS activity,
@@ -150,7 +146,7 @@ cutoff AS (        -- per brand + activity: last date with real data (at least t
     FROM pb
     GROUP BY UPPER(TRIM(brand_name))
 ),
-real_day AS (      -- real qty per brand + activity + date (outbound by delivery date, not pick day)
+real_day AS (      -- real qty per brand + activity + date (outbound by delivery date)
     SELECT UPPER(TRIM(brand_name)) AS brand_key, 'Outbound' AS activity,
            delivery_date AS d, SUM(product_qty) AS qty
     FROM outbound
@@ -162,25 +158,45 @@ real_day AS (      -- real qty per brand + activity + date (outbound by delivery
     WHERE workload_date > DATE('now')
     GROUP BY 1, 3
 ),
-plan_day AS (      -- plan per brand + activity + date
+plan_day AS (      -- plan per brand + activity + date; is_manual = row comes from plan_mer_detail (campaign)
     SELECT UPPER(TRIM(brand_name)) AS brand_key, brand_name,
            CASE plan_type WHEN 'outbound' THEN 'Outbound' ELSE 'Pullback' END AS activity,
-           delivery_date AS d, SUM(qty) AS qty
+           delivery_date AS d, SUM(qty) AS qty,
+           MAX(CASE WHEN source = 'manual' THEN 1 ELSE 0 END) AS is_manual
     FROM vw_pbi_plan_final
     WHERE plan_type IN ('outbound', 'pullback')
       AND delivery_date > DATE('now')
       AND delivery_date <= DATE('now', '+365 days')
     GROUP BY 1, 2, 3, 4
 ),
-planned AS (       -- after the brand's real data: full plan; up to it (from tomorrow): top-up = plan - real
-    SELECT p.d AS work_date, p.brand_name, p.activity, 'Plan' AS status,
+plan_qty AS (      -- after the brand's real data: full plan; up to it (from tomorrow): top-up = plan - real
+    SELECT p.d, p.brand_name, p.activity, p.is_manual,
            CASE WHEN p.d > COALESCE(c.last_real, DATE('now')) THEN p.qty
                 ELSE p.qty - COALESCE(r.qty, 0) END AS qty
     FROM plan_day p
     LEFT JOIN cutoff c   ON c.brand_key = p.brand_key AND c.activity = p.activity
     LEFT JOIN real_day r ON r.brand_key = p.brand_key AND r.activity = p.activity AND r.d = p.d
-    WHERE CASE WHEN p.d > COALESCE(c.last_real, DATE('now')) THEN p.qty
-               ELSE p.qty - COALESCE(r.qty, 0) END > 0
+),
+plan_win AS (      -- campaign outbound (plan_mer_detail): spread over max_pick_days working days ending on delivery,
+                   -- from tomorrow only; days already gone are squeezed into the days left
+    SELECT q.brand_name, q.activity, q.qty, x.end_no,
+           MIN(MAX(x.end_no - (SELECT max_pick_days FROM std) + 1, (SELECT n FROM next_wd)), x.end_no) AS start_no
+    FROM plan_qty q
+    JOIN (SELECT d, MAX(wd_no) AS end_no FROM (SELECT DISTINCT d FROM plan_qty) pd
+          JOIN wd ON wd.Date <= pd.d GROUP BY d) x ON x.d = q.d
+    WHERE q.activity = 'Outbound' AND q.is_manual = 1 AND q.qty > 0
+),
+planned AS (
+    SELECT q.d AS work_date, q.brand_name, q.activity, 'Plan' AS status, q.qty
+    FROM plan_qty q
+    WHERE q.qty > 0 AND NOT (q.activity = 'Outbound' AND q.is_manual = 1)
+    UNION ALL
+    SELECT d.Date, w.brand_name, w.activity, 'Plan',
+           w.qty / (w.end_no - w.start_no + 1)
+           + CASE WHEN o.k + 1 <= w.qty % (w.end_no - w.start_no + 1) THEN 1 ELSE 0 END
+    FROM plan_win w
+    JOIN offs o ON o.k <= w.end_no - w.start_no
+    JOIN wd   d ON d.wd_no = w.start_no + o.k
 ),
 src AS (
     SELECT * FROM committed
@@ -192,6 +208,9 @@ FROM src
 WHERE work_date >= DATE('now')   -- forward-looking only
 GROUP BY work_date, brand_name, activity, status
 HAVING SUM(qty) <> 0;
+
+
+
 
 
 
@@ -543,3 +562,84 @@ WHERE arrival_date IS NULL
   AND arrival_date_status = 'Unscheduled'
 GROUP BY activity, shop_region, brand_name
 ORDER BY rows_unscheduled DESC;
+
+CREATE VIEW vw_pbi_pullback_queue AS
+WITH RECURSIVE
+wd AS (            -- working days from today
+    SELECT d.Date AS work_date, ROW_NUMBER() OVER (ORDER BY d.Date) AS n
+    FROM date_tb d
+    WHERE d.Date BETWEEN DATE('now') AND DATE('now', '+365 days')
+      AND d.Weekend = 'Weekday'
+      AND NOT EXISTS (SELECT 1 FROM date_exception e
+                      WHERE d.Date BETWEEN e.start_date AND e.end_date)
+),
+std AS (
+    SELECT CAST(COALESCE(MAX(CASE WHEN standard_code = 'outbound_per_hc'        THEN standard_value END), 550) AS REAL) AS ob_rate,
+           CAST(COALESCE(MAX(CASE WHEN standard_code = 'in_pullback_per_hc'     THEN standard_value END), 550) AS REAL) AS pb_rate,
+           CAST(COALESCE(MAX(CASE WHEN standard_code = 'pullback_max_wait_days' THEN standard_value END), 5)   AS INTEGER) AS max_wait
+    FROM standard
+),
+wl AS (            -- work arriving per day (from the workload view)
+    SELECT work_date,
+           SUM(CASE WHEN activity = 'Outbound' THEN qty ELSE 0 END) AS ob,
+           SUM(CASE WHEN activity = 'Pullback' THEN qty ELSE 0 END) AS pb
+    FROM vw_pbi_daily_workload
+    GROUP BY work_date
+),
+ct AS (
+    SELECT work_date, SUM(hc) AS hc FROM vw_pbi_cont_job_daily GROUP BY work_date
+),
+base AS (          -- per working day: available HC, must-do HC, pullback capacity
+    SELECT w.n, w.work_date,
+           (SELECT COUNT(*) FROM employee e
+            WHERE e.is_direct_labor = 1
+              AND e.start_date <= w.work_date
+              AND (e.end_date IS NULL OR e.end_date = '' OR e.end_date >= w.work_date)
+              AND NOT EXISTS (SELECT 1 FROM employee_leave l
+                              WHERE l.employee_code = e.employee_code
+                                AND w.work_date BETWEEN l.start_date AND l.end_date)) AS avail_hc,
+           COALESCE(l.ob, 0) AS ob_pcs,
+           COALESCE(c.hc, 0) AS cont_hc,
+           COALESCE(l.pb, 0) AS pb_in,
+           SUM(COALESCE(l.pb, 0)) OVER (ORDER BY w.n) AS cum_in
+    FROM wd w
+    LEFT JOIN wl l ON l.work_date = w.work_date
+    LEFT JOIN ct c ON c.work_date = w.work_date
+),
+b2 AS (
+    SELECT b.*,
+           CAST(b.ob_pcs / s.ob_rate AS INTEGER) + (b.ob_pcs / s.ob_rate > CAST(b.ob_pcs / s.ob_rate AS INTEGER))
+               + b.cont_hc                                                        AS must_do_hc,
+           MAX(b.avail_hc
+               - (CAST(b.ob_pcs / s.ob_rate AS INTEGER) + (b.ob_pcs / s.ob_rate > CAST(b.ob_pcs / s.ob_rate AS INTEGER)))
+               - b.cont_hc, 0) * s.pb_rate                                        AS cap_pcs,
+           COALESCE((SELECT b0.cum_in FROM base b0 WHERE b0.n = b.n - s.max_wait), 0) AS due_cum  -- arrived max_wait days ago: must be done today
+    FROM base b, std s
+),
+q(n, done_cum) AS (  -- FIFO queue: oldest first; spare HC only, unless pullback reaches max wait
+    SELECT 0, 0
+    UNION ALL
+    SELECT b.n,
+           q.done_cum + MIN(b.cum_in - q.done_cum, MAX(b.cap_pcs, b.due_cum - q.done_cum))
+    FROM q JOIN b2 b ON b.n = q.n + 1
+)
+SELECT b.work_date,
+       b.avail_hc,
+       CAST(b.must_do_hc AS INTEGER)                                    AS must_do_hc,
+       b.ob_pcs,
+       CAST(b.cont_hc AS INTEGER)                                       AS cont_hc,
+       b.pb_in,
+       CAST(q.done_cum - p.done_cum AS INTEGER)                         AS pb_handled,
+       CAST(MAX(q.done_cum - p.done_cum - b.cap_pcs, 0) AS INTEGER)     AS pb_forced,      -- pcs that hit max wait with no spare HC
+       CAST(b.cum_in - q.done_cum AS INTEGER)                           AS queue_end,
+       CASE WHEN b.cum_in - q.done_cum > 0
+            THEN b.n - (SELECT MIN(b1.n) FROM base b1 WHERE b1.cum_in > q.done_cum) ELSE 0 END AS oldest_wait_days,
+       CAST(CAST((b.ob_pcs / s.ob_rate + (q.done_cum - p.done_cum) / s.pb_rate) AS INTEGER)
+         + ((b.ob_pcs / s.ob_rate + (q.done_cum - p.done_cum) / s.pb_rate)
+            > CAST((b.ob_pcs / s.ob_rate + (q.done_cum - p.done_cum) / s.pb_rate) AS INTEGER))
+         + b.cont_hc AS INTEGER)                                        AS required_hc     -- outbound + pullback handled (rounded up once) + CONT
+FROM b2 b
+JOIN q ON q.n = b.n
+JOIN q p ON p.n = b.n - 1
+CROSS JOIN std s
+;

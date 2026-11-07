@@ -167,3 +167,11 @@ i.barcode AS Barcode,
 i.variant AS Variant,
 i.type AS LOẠI
 FROM item_zsta i;
+
+CREATE VIEW data_tool_employee_list AS
+SELECT
+	id,
+    employee_full_name,
+    employee_code
+FROM employee
+WHERE end_date IS NULL AND main_site_code = 'D111' And is_direct_labor = 1;

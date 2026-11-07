@@ -6,46 +6,24 @@ PRAGMA foreign_keys = OFF;
 PRAGMA foreign_keys = ON;
 
 
-SELECT 'SELECT * FROM (SELECT * FROM "' || name || '" ORDER BY id DESC LIMIT 200) ORDER BY id;'
-FROM sqlite_master WHERE type = 'table'  AND name NOT LIKE 'sqlite_%';
 
-
-ALTER TABLE carrier_zone_hcm RENAME COLUMN "description" TO district;
-ALTER TABLE shop DROP COLUMN pullback_schedule;
-ALTER TABLE shop ADD COLUMN pullback_schedule INTEGER DEFAULT 0 CHECK (pullback_schedule IN (0, 1));
-
-
-
--- xóa dòng dup trong bảng item_export
 DELETE FROM item_export WHERE id NOT IN ( SELECT MAX(id) FROM item_export GROUP BY barcode) AND barcode IN ( SELECT barcode FROM item_export GROUP BY barcode HAVING COUNT(*) > 1 );
-
-
--- reset data cho bảng itemlist
 DELETE FROM item_list;
 DELETE FROM sqlite_sequence WHERE name = 'item_list';
 INSERT INTO item_list SELECT * FROM vw_zdata_item_list;
 
 
--- thêm kí tự vào dòng dữ liệu đã có
-UPDATE carrier_zone_hcm_pricing SET vehicle_type = vehicle_type || 'T' WHERE vehicle_type IN ('1.0', '1.9', '2.5');
 
 
--- reset dữ liệu 2 bảng SOH
 DELETE FROM soh_main;
 DELETE FROM soh_taras;
 DELETE FROM sqlite_sequence WHERE name = 'soh_main';
 DELETE FROM sqlite_sequence WHERE name = 'soh_taras';
 
 
--- xóa kí tự phẩy trong số lượng của SOH
+
 UPDATE soh_main SET unrestricted = REPLACE(unrestricted, ',', '') WHERE unrestricted LIKE '%,%';
 UPDATE soh_taras SET unrestricted = REPLACE(unrestricted, ',', '') WHERE unrestricted LIKE '%,%';
-
-
-
--- xóa dấu cách bên trong nội dung
-UPDATE plan_mer_detail SET delivery_date = REPLACE(delivery_date, ' ', ''), created_at = REPLACE(created_at, ' ', '')
-WHERE delivery_date LIKE '% %' OR created_at LIKE '% %';
 
 
 
@@ -214,3 +192,13 @@ WHERE delivery_order_num IS NOT NULL
 GROUP BY delivery_order_num
 HAVING COUNT(*) > 1
 ORDER BY duplicate_count DESC;
+
+
+-- alter table statement
+ALTER TABLE carrier_zone_hcm RENAME COLUMN "description" TO district;
+ALTER TABLE shop DROP COLUMN pullback_schedule;
+ALTER TABLE shop ADD COLUMN pullback_schedule INTEGER DEFAULT 0 CHECK (pullback_schedule IN (0, 1));
+
+-- export sample data
+SELECT 'SELECT * FROM (SELECT * FROM "' || name || '" ORDER BY id DESC LIMIT 200) ORDER BY id;'
+FROM sqlite_master WHERE type = 'table'  AND name NOT LIKE 'sqlite_%';
