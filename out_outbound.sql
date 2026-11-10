@@ -18,7 +18,12 @@ id
 FROM outbound o
 where o.transfer_order_num in (
 --where delivery_order_num in (
-2000212013
+2000212349,
+2000212328,
+2000212331,
+2000212335,
+2000212350
+
 
 
 

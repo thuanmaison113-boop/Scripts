@@ -544,7 +544,14 @@ a.region,
 s.carrier,
 a.arrival_date;
 
-
+CREATE VIEW AAA_employee_list AS
+SELECT
+	id,
+    employee_code,
+    employee_full_name,
+    employee_short_name
+FROM employee
+WHERE end_date IS NULL AND main_site_code = 'D111';
 
 
 

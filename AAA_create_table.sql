@@ -25,8 +25,9 @@ CREATE TABLE inbound (
     inbound_code TEXT,
     way_bill TEXT DEFAULT '-',
     checklist TEXT DEFAULT 0,
-    FOREIGN KEY (shop_code) REFERENCES shop(shop_code)
-        ON UPDATE CASCADE,
+    one_off_event TEXT NOT NULL DEFAULT 'normal',
+    FOREIGN KEY (one_off_event) REFERENCES one_off_event_type(event_code),
+    FOREIGN KEY (shop_code) REFERENCES shop(shop_code),
     FOREIGN KEY (good_issue_date) REFERENCES date_tb(Date),
     FOREIGN KEY (arrival_date) REFERENCES date_tb(Date),
     FOREIGN KEY (good_receipt_date) REFERENCES date_tb(Date)
@@ -43,10 +44,10 @@ AFTER INSERT ON inbound
 FOR EACH ROW
 BEGIN
     UPDATE inbound
-    SET 
+    SET
         shop_name = (SELECT s.shop_name FROM shop s WHERE s.shop_code = NEW.shop_code),
         brand_name = (SELECT b.brand_name FROM shop s INNER JOIN brand b ON s.brand = b.brand_code WHERE s.shop_code = NEW.shop_code),
-        region = (SELECT p.region FROM shop s INNER JOIN province p ON s.province_id = p.id WHERE s.shop_code = NEW.shop_code),
+        region = (SELECT p.region FROM province p JOIN shop s ON s.province_id = p.province_id WHERE s.shop_code = NEW.shop_code),
         inbound_code = 
         CASE
             WHEN SUBSTR(NEW.purchase_order_num, 1, 2) = '47' THEN 'I-' || NEW.delivery_order_num || '-001'
@@ -104,9 +105,9 @@ CREATE TABLE outbound (
     failed_qc_qty INTEGER DEFAULT 0,
     note2 TEXT DEFAULT '-',
     checklist TEXT DEFAULT 0,
-    FOREIGN KEY (shop_code) REFERENCES shop(shop_code)
-        --ON DELETE CASCADE
-        ON UPDATE CASCADE,
+    one_off_event TEXT NOT NULL DEFAULT 'normal',
+    FOREIGN KEY (one_off_event) REFERENCES one_off_event_type(event_code),
+    FOREIGN KEY (shop_code) REFERENCES shop(shop_code),
     FOREIGN KEY (post_date) REFERENCES date_tb(Date),
     FOREIGN KEY (order_date) REFERENCES date_tb(Date),
     FOREIGN KEY (delivery_date) REFERENCES date_tb(Date)
@@ -125,7 +126,7 @@ BEGIN
     SET 
         shop_name = (SELECT s.shop_name FROM shop s WHERE s.shop_code = NEW.shop_code),
         brand_name = (SELECT b.brand_name FROM shop s INNER JOIN brand b ON s.brand = b.brand_code WHERE s.shop_code = NEW.shop_code),
-        region = (SELECT p.region FROM shop s INNER JOIN province p ON s.province_id = p.id WHERE s.shop_code = NEW.shop_code)
+        region = (SELECT p.region FROM province p JOIN shop s ON s.province_id = p.province_id WHERE s.shop_code = NEW.shop_code)
     WHERE rowid = NEW.rowid;
 END;
 
@@ -299,13 +300,13 @@ CREATE TABLE item_list (
         ON UPDATE CASCADE
 );
 CREATE INDEX idx_item_list_barcode ON item_list(barcode);
-CREATE INDEX idx_item_list_variant ON item_list(variant);
 CREATE INDEX idx_item_list_style_code ON item_list(style_code);
+CREATE UNIQUE INDEX idx_item_list_variant ON item_list(variant);
 
 CREATE TABLE item_type (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-	type TEXT,
-	kind TEXT,
+	type TEXT UNIQUE,
+	kind TEXT DEFAULT '-',
 	variant_prefix Text
 );
 
@@ -396,6 +397,7 @@ CREATE TABLE brand (
 	note TEXT DEFAULT '-',
 	capacity_factor INTEGER DEFAULT 0
 )
+CREATE UNIQUE INDEX idx_brand_brand_name ON brand(brand_name);
 
 CREATE TABLE item_material (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -468,6 +470,7 @@ CREATE TABLE stocktaking (
         ON UPDATE CASCADE,
     FOREIGN KEY (document_date) REFERENCES date_tb(Date)
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_stocktaking_stocktaking_num ON stocktaking(stocktaking_num);
 CREATE TRIGGER stocktaking_add_brand_name
 AFTER INSERT ON stocktaking
 FOR EACH ROW
@@ -1416,3 +1419,47 @@ CREATE TABLE IF NOT EXISTS support_numbers (
 INSERT OR IGNORE INTO support_numbers (n)
 WITH RECURSIVE seq(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM seq WHERE n < 10000)
 SELECT n FROM seq;
+
+CREATE TABLE IF NOT EXISTS web_users_app (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    username     TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    password     TEXT NOT NULL,
+    display_name TEXT,
+    role         TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+    active       INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+    created_at   TEXT DEFAULT (datetime('now', 'localtime')),
+    last_login   TEXT
+);
+
+
+
+CREATE TABLE IF NOT EXISTS web_users_app_log (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    logged_at     TEXT DEFAULT (datetime('now', 'localtime')),
+    username      TEXT,              -- who did it (worker events: the request owner)
+    client_ip     TEXT,              -- browser IP; NULL for worker / timer events
+    event_type    TEXT NOT NULL,
+    job_id        INTEGER,           -- request number (#12) when the event is about a job
+    task          TEXT,              -- SAP task name, e.g. demo
+    params        TEXT,              -- task inputs as JSON, e.g. {"doc_number": "4500234122", "plant": "D111"}
+    target_user   TEXT,              -- user being changed (user_* events)
+    status        TEXT NOT NULL DEFAULT 'ok' CHECK (status IN ('ok', 'error')),
+    duration_s    REAL,              -- job_done / job_failed: total run time
+    row_count     INTEGER,           -- job_done: rows returned by SAP
+    error_message TEXT               -- the message the user saw (login_failed, job_failed …)
+);
+CREATE INDEX IF NOT EXISTS ix_web_users_app_log_time ON web_users_app_log (logged_at);
+CREATE INDEX IF NOT EXISTS ix_web_users_app_log_user ON web_users_app_log (username, logged_at);
+CREATE INDEX IF NOT EXISTS ix_web_users_app_log_job  ON web_users_app_log (job_id);
+
+
+CREATE TABLE one_off_event_type (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_code  TEXT UNIQUE CHECK (event_code <> '' AND event_code = lower(trim(event_code))),
+    event_name  TEXT NOT NULL,
+    description TEXT,
+    note_needed INTEGER NOT NULL DEFAULT 0 CHECK (note_needed IN (0, 1)),  -- 1 = explain in the row's note
+    is_active   INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),    -- 0 = retired, keep for old rows
+    sort_order  INTEGER
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_one_off_event_code_unique ON one_off_event_type(event_code);

@@ -85,9 +85,6 @@ JOIN wd   w ON w.wd_no = q.start_no + o.k;
 
 
 
-
-
-DROP VIEW IF EXISTS vw_pbi_daily_workload;
 CREATE VIEW vw_pbi_daily_workload AS
 WITH wd AS (
     SELECT d.Date, ROW_NUMBER() OVER (ORDER BY d.Date) AS wd_no
@@ -113,12 +110,15 @@ offs(k) AS (       -- 0 .. max_pick_days-1
     UNION ALL
     SELECT k + 1 FROM offs WHERE k + 1 < (SELECT max_pick_days FROM std)
 ),
-ob AS (            -- real outbound orders: one work day = last working day on/before delivery (not before today)
-    SELECT o.brand_name, o.product_qty AS qty,
+ob AS (            -- v6: qty = order_qty (product_qty only after picking). real outbound orders: one work day = last working day on/before delivery (not before today)
+    SELECT o.brand_name, COALESCE(NULLIF(o.order_qty, 0), o.product_qty) AS qty,
            MAX((SELECT MAX(wd_no) FROM wd WHERE wd.Date <= o.delivery_date),
                (SELECT n FROM today_wd)) AS work_no
     FROM outbound o
-    WHERE o.delivery_date >= DATE('now') AND COALESCE(o.product_qty, 0) > 0
+    WHERE o.delivery_date >= DATE('now') AND COALESCE(NULLIF(o.order_qty, 0), o.product_qty, 0) > 0
+      AND COALESCE(o.one_off_event, '') <> 'paper_bag'   -- v6: paper bag batches are not workload
+      AND (o.delivery_date = DATE('now')                  -- v6: today = every line due today
+           OR COALESCE(o.product_qty, 0) = 0)             --     later days = only lines not yet picked (picked = pick + pack done)
 ),
 pb AS (            -- pullback real work, read once
     SELECT workload_date, brand_name, arrival_date_status, workload_qty
@@ -138,7 +138,8 @@ cutoff AS (        -- per brand + activity: last date with real data (at least t
     SELECT UPPER(TRIM(brand_name)) AS brand_key, 'Outbound' AS activity,
            MAX(MAX(delivery_date), DATE('now')) AS last_real
     FROM outbound
-    WHERE delivery_date >= DATE('now') AND COALESCE(product_qty, 0) > 0
+    WHERE delivery_date >= DATE('now') AND COALESCE(NULLIF(order_qty, 0), product_qty, 0) > 0
+      AND COALESCE(one_off_event, '') <> 'paper_bag'
     GROUP BY UPPER(TRIM(brand_name))
     UNION ALL
     SELECT UPPER(TRIM(brand_name)), 'Pullback',
@@ -148,9 +149,10 @@ cutoff AS (        -- per brand + activity: last date with real data (at least t
 ),
 real_day AS (      -- real qty per brand + activity + date (outbound by delivery date)
     SELECT UPPER(TRIM(brand_name)) AS brand_key, 'Outbound' AS activity,
-           delivery_date AS d, SUM(product_qty) AS qty
+           delivery_date AS d, SUM(COALESCE(NULLIF(order_qty, 0), product_qty)) AS qty
     FROM outbound
-    WHERE delivery_date > DATE('now') AND COALESCE(product_qty, 0) > 0
+    WHERE delivery_date > DATE('now') AND COALESCE(NULLIF(order_qty, 0), product_qty, 0) > 0
+      AND COALESCE(one_off_event, '') <> 'paper_bag'
     GROUP BY 1, 3
     UNION ALL
     SELECT UPPER(TRIM(brand_name)), 'Pullback', workload_date, SUM(workload_qty)

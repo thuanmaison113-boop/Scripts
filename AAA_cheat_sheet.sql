@@ -4,8 +4,10 @@ PRAGMA freelist_count;
 
 PRAGMA foreign_keys = OFF;
 PRAGMA foreign_keys = ON;
-
-
+PRAGMA foreign_keys;
+PRAGMA foreign_key_check;
+PRAGMA foreign_key_list('item_zsta');
+CREATE UNIQUE INDEX IF NOT EXISTS idx_inbound_purchase_order_num_unique ON inbound(purchase_order_num);
 
 DELETE FROM item_export WHERE id NOT IN ( SELECT MAX(id) FROM item_export GROUP BY barcode) AND barcode IN ( SELECT barcode FROM item_export GROUP BY barcode HAVING COUNT(*) > 1 );
 DELETE FROM item_list;
@@ -26,6 +28,7 @@ UPDATE soh_main SET unrestricted = REPLACE(unrestricted, ',', '') WHERE unrestri
 UPDATE soh_taras SET unrestricted = REPLACE(unrestricted, ',', '') WHERE unrestricted LIKE '%,%';
 
 
+INSERT INTO inbound_new SELECT * FROM inbound;
 
 -- GET COLUMN LIST HORIZONTALLY
 SELECT GROUP_CONCAT(name, ', ') AS column_list FROM PRAGMA_TABLE_INFO('brand');
@@ -202,3 +205,8 @@ ALTER TABLE shop ADD COLUMN pullback_schedule INTEGER DEFAULT 0 CHECK (pullback_
 -- export sample data
 SELECT 'SELECT * FROM (SELECT * FROM "' || name || '" ORDER BY id DESC LIMIT 200) ORDER BY id;'
 FROM sqlite_master WHERE type = 'table'  AND name NOT LIKE 'sqlite_%';
+
+-- FIND SHOP NOT IN SHOP TABLE
+SELECT *
+FROM inbound i
+WHERE NOT EXISTS ( SELECT 1 FROM shop s WHERE s.shop_code = i.shop_code);

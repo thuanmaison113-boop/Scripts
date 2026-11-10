@@ -175,3 +175,11 @@ SELECT
     employee_code
 FROM employee
 WHERE end_date IS NULL AND main_site_code = 'D111' And is_direct_labor = 1;
+
+CREATE VIEW data_tool_web_app_login AS
+SELECT employee_code      AS username,
+       employee_full_name AS display_name,
+       phone_number
+FROM employee
+WHERE end_date IS NULL AND main_site_code = "D111"
+  AND employee_code IS NOT NULL AND TRIM(employee_code) <> '';
