@@ -1,6 +1,3 @@
-
-
-
 CREATE VIEW vw_pbi_cont_job AS
 WITH std AS (
     SELECT
@@ -212,10 +209,6 @@ GROUP BY work_date, brand_name, activity, status
 HAVING SUM(qty) <> 0;
 
 
-
-
-
-
 CREATE VIEW vw_pbi_soh_capacity_base AS
 SELECT
     s.barcode,
@@ -243,7 +236,6 @@ SELECT 'Taras' AS site, article_number, article_type, brand,
        unrestricted, snapshot_date
 FROM soh_taras WHERE brand <> '';
 
-DROP VIEW IF EXISTS vw_pbi_inbound_expected_arrival;
 CREATE VIEW vw_pbi_inbound_expected_arrival AS
 WITH wd AS (
     SELECT d.Date, d.Day_Of_Week_Number,
@@ -298,8 +290,6 @@ SELECT calc.*,
     COALESCE(input_standard,0) + COALESCE(input_taras_defect,0)
       + COALESCE(input_visual_merchandising,0)    AS workload_qty
 FROM calc;
-
-
 
 
 
@@ -547,23 +537,7 @@ WHERE NOT EXISTS (
     WHERE dt.Date >= de.start_date AND dt.Date <= de.end_date
 );
 
-CREATE VIEW vw_check_plan_closed_day AS
- SELECT p.source, p.plan_type, p.brand_code, p.delivery_date, SUM(p.qty) AS qty_dropped
- FROM vw_pbi_plan_final_all p
- JOIN date_tb dt ON dt.Date = p.delivery_date
- WHERE p.delivery_date >= DATE('now')
-   AND (dt.Weekend <> 'Weekday'
-        OR EXISTS (SELECT 1 FROM date_exception de
-                   WHERE p.delivery_date BETWEEN de.start_date AND de.end_date))
- GROUP BY p.source, p.plan_type, p.brand_code, p.delivery_date;
 
-CREATE VIEW vw_check_inbound_expected_arrival_unresolved AS
-SELECT activity, shop_region, brand_name, COUNT(*) AS rows_unscheduled
-FROM vw_pbi_inbound_expected_arrival
-WHERE arrival_date IS NULL
-  AND arrival_date_status = 'Unscheduled'
-GROUP BY activity, shop_region, brand_name
-ORDER BY rows_unscheduled DESC;
 
 CREATE VIEW vw_pbi_pullback_queue AS
 WITH RECURSIVE
@@ -645,3 +619,5 @@ JOIN q ON q.n = b.n
 JOIN q p ON p.n = b.n - 1
 CROSS JOIN std s
 ;
+
+

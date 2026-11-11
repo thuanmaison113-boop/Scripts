@@ -2,6 +2,7 @@ VACUUM;
 ANALYZE;
 PRAGMA freelist_count;
 
+PRAGMA legacy_alter_table = ON;
 PRAGMA foreign_keys = OFF;
 PRAGMA foreign_keys = ON;
 PRAGMA foreign_keys;
@@ -15,8 +16,6 @@ DELETE FROM sqlite_sequence WHERE name = 'item_list';
 INSERT INTO item_list SELECT * FROM vw_zdata_item_list;
 
 
-
-
 DELETE FROM soh_main;
 DELETE FROM soh_taras;
 DELETE FROM sqlite_sequence WHERE name = 'soh_main';
@@ -26,6 +25,13 @@ DELETE FROM sqlite_sequence WHERE name = 'soh_taras';
 
 UPDATE soh_main SET unrestricted = REPLACE(unrestricted, ',', '') WHERE unrestricted LIKE '%,%';
 UPDATE soh_taras SET unrestricted = REPLACE(unrestricted, ',', '') WHERE unrestricted LIKE '%,%';
+DELETE FROM soh_main  WHERE COALESCE(barcode, '') = '' AND COALESCE(article_number, '') = '';
+DELETE FROM soh_taras WHERE COALESCE(barcode, '') = '' AND COALESCE(article_number, '') = '';
+
+
+UPDATE outbound SET one_off_event = LOWER(TRIM(one_off_event)) WHERE one_off_event IS NOT NULL AND one_off_event <> LOWER(TRIM(one_off_event));
+UPDATE inbound SET one_off_event = LOWER(TRIM(one_off_event)) WHERE one_off_event IS NOT NULL AND one_off_event <> LOWER(TRIM(one_off_event));
+
 
 
 INSERT INTO inbound_new SELECT * FROM inbound;
@@ -175,27 +181,6 @@ WHERE status IS NOT
         ELSE 'process'
     END;
 
--------- find shop_code not exist in outbound_groupx
-SELECT s.shop_code,
-s.shop_name 
-FROM shop s
-WHERE NOT EXISTS (
-    SELECT 1
-    FROM outbound_groupx og
-    WHERE og.shop_code = s.shop_code
-) AND shop_type NOT IN ("warehouse","GENERAL","ecom");
-
--- check dup DO trong outbound
-SELECT 
-    delivery_order_num,
-    COUNT(*) AS duplicate_count
-FROM outbound
-WHERE delivery_order_num IS NOT NULL
-  AND delivery_order_num <> ''
-GROUP BY delivery_order_num
-HAVING COUNT(*) > 1
-ORDER BY duplicate_count DESC;
-
 
 -- alter table statement
 ALTER TABLE carrier_zone_hcm RENAME COLUMN "description" TO district;
@@ -206,7 +191,36 @@ ALTER TABLE shop ADD COLUMN pullback_schedule INTEGER DEFAULT 0 CHECK (pullback_
 SELECT 'SELECT * FROM (SELECT * FROM "' || name || '" ORDER BY id DESC LIMIT 200) ORDER BY id;'
 FROM sqlite_master WHERE type = 'table'  AND name NOT LIKE 'sqlite_%';
 
--- FIND SHOP NOT IN SHOP TABLE
-SELECT *
-FROM inbound i
-WHERE NOT EXISTS ( SELECT 1 FROM shop s WHERE s.shop_code = i.shop_code);
+
+
+-- fix shop_new problem
+PRAGMA foreign_keys = OFF;
+PRAGMA legacy_alter_table = ON;
+ALTER TABLE pullback RENAME TO pullback_old;
+CREATE TABLE "pullback" (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pullback_date DATE NOT NULL CHECK (strftime('%Y-%m-%d', pullback_date) = pullback_date),
+    from_shop TEXT NOT NULL,
+    to_shop TEXT NOT NULL,
+    box_qty INTEGER DEFAULT 0 CHECK (box_qty >= 0),
+    product INTEGER DEFAULT 0 CHECK (product >= 0),
+    paper_bag INTEGER DEFAULT 0 CHECK (paper_bag >= 0),
+    note TEXT DEFAULT '-',
+    FOREIGN KEY (from_shop) REFERENCES shop(shop_code)
+        ON UPDATE CASCADE,
+    FOREIGN KEY (to_shop) REFERENCES shop(shop_code)
+        ON UPDATE CASCADE,
+    FOREIGN KEY (pullback_date) REFERENCES date_tb(Date)
+);
+INSERT INTO pullback (id, pullback_date, from_shop, to_shop, box_qty, product, paper_bag, note)
+SELECT id, pullback_date, from_shop, to_shop, box_qty, product, paper_bag, note FROM pullback_old;
+UPDATE sqlite_sequence SET seq = (SELECT seq FROM sqlite_sequence WHERE name = 'pullback_old')
+WHERE name = 'pullback' AND (SELECT seq FROM sqlite_sequence WHERE name = 'pullback_old') > seq;
+DROP TABLE pullback_old;
+
+
+-- check bad row connect
+SELECT "table", parent, COUNT(*) AS bad_rows
+FROM pragma_foreign_key_check
+WHERE "table" IN ('pullback', 'outbound_include', 'outbound_groupx')
+GROUP BY "table", parent;

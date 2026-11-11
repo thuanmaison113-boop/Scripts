@@ -9,5 +9,6 @@ stock_transfer_order_num,
 delivery_order_num,
 transfer_order_num,
 note,
+one_off_event,
 id
 FROM outbound ORDER BY id DESC LIMIT 1;

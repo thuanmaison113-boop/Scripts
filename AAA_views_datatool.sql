@@ -112,13 +112,7 @@ note
 FROM inbound
 WHERE good_receipt_date is null AND region <> 'CONT';
 
-CREATE VIEW vw_zdata_item_40_not_in_zsta AS
-SELECT e.*
-FROM item_export e
-LEFT JOIN item_zsta z
-    ON CAST(e.Variant AS TEXT) = CAST(z.variant AS TEXT)
-WHERE substr(CAST(e.Variant AS TEXT), 1, 2) = '40'
-  AND z.variant IS NULL;
+
 
 CREATE VIEW vw_zdata_item_list AS
 SELECT

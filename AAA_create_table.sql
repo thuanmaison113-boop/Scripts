@@ -1431,8 +1431,6 @@ CREATE TABLE IF NOT EXISTS web_users_app (
     last_login   TEXT
 );
 
-
-
 CREATE TABLE IF NOT EXISTS web_users_app_log (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     logged_at     TEXT DEFAULT (datetime('now', 'localtime')),
@@ -1463,3 +1461,42 @@ CREATE TABLE one_off_event_type (
     sort_order  INTEGER
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_one_off_event_code_unique ON one_off_event_type(event_code);
+
+INSERT INTO carrier_zone_hcm_pricing (carrier,zone_id,vehicle_type,base_price,extra_same_area,extra_other_area,loading_fee) VALUES
+	 ('nhattin','KV1','1.0T',560000,170000,210000,6000),
+	 ('nhattin','KV1','1.9T',670000,170000,210000,6000),
+	 ('nhattin','KV1','2.5T',760000,170000,210000,6000),
+	 ('nhattin','KV2','1.0T',580000,210000,280000,6000),
+	 ('nhattin','KV2','1.9T',780000,210000,280000,6000),
+	 ('nhattin','KV2','2.5T',920000,210000,280000,6000),
+	 ('nhattin','KV3','1.0T',690000,210000,280000,6000),
+	 ('nhattin','KV3','1.9T',860000,210000,280000,6000),
+	 ('nhattin','KV3','2.5T',1050000,210000,280000,6000),
+	 ('nhattin','KV4','1.0T',810000,250000,300000,6000),
+	 ('nhattin','KV4','1.9T',980000,250000,300000,6000),
+	 ('nhattin','KV4','2.5T',1200000,250000,300000,6000),
+	 ('nhattin','KV5','1.0T',810000,140000,260000,6000),
+	 ('nhattin','KV5','1.9T',860000,140000,260000,6000),
+	 ('nhattin','KV5','2.5T',920000,140000,260000,6000);
+
+INSERT INTO carrier_zone_hcm (carier,zone_id,district) VALUES
+	 ('nhattin','KV1','Q2'),
+	 ('nhattin','KV1','Q9'),
+	 ('nhattin','KV1','BinhThanh'),
+	 ('nhattin','KV1','ThuDuc'),
+	 ('nhattin','KV1','GoVap'),
+	 ('nhattin','KV2','Q1'),
+	 ('nhattin','KV2','Q4'),
+	 ('nhattin','KV2','Q7'),
+	 ('nhattin','KV2','TanBinh'),
+	 ('nhattin','KV2','PhuNhuan'),
+	 ('nhattin','KV3','Q3'),
+	 ('nhattin','KV3','Q10'),
+	 ('nhattin','KV3','TanPhu'),
+	 ('nhattin','KV4','Q5'),
+	 ('nhattin','KV4','Q6'),
+	 ('nhattin','KV4','Q11'),
+	 ('nhattin','KV4','Q8'),
+	 ('nhattin','KV4','BinhTan'),
+	 ('nhattin','KV5','AeonBinhDuong');
+
