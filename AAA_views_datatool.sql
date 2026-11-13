@@ -177,3 +177,16 @@ SELECT employee_code      AS username,
 FROM employee
 WHERE end_date IS NULL AND main_site_code = "D111"
   AND employee_code IS NOT NULL AND TRIM(employee_code) <> '';
+
+CREATE VIEW data_tool_shop_code_map AS
+SELECT g.shop_code   AS sap_code,
+       b.brand_code  AS brand_code,
+       (SELECT s.shop_code
+        FROM shop s
+        WHERE s.shop_code = TRIM(bs.frefix) || ' ' || g.shop_code
+          AND COALESCE(TRIM(bs.frefix), '') NOT IN ('', '-')) AS resolved_code
+FROM shop g
+CROSS JOIN brand b
+LEFT JOIN brand_section bs ON bs.brand_code = b.brand_code
+WHERE g.is_generic = 1
+  AND b.is_active = 1;

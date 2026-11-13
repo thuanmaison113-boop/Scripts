@@ -14,10 +14,12 @@ CREATE TABLE inbound (
     purchase_order_num TEXT DEFAULT '-',
     delivery_order_num TEXT DEFAULT '-',
 	good_issue_date DATE CHECK (good_issue_date IS NULL OR strftime('%Y-%m-%d', good_issue_date) = good_issue_date),
-    transfer_order_num TEXT DEFAULT '-',
     put_away_bin TEXT DEFAULT '-',
+    transfer_order_num TEXT DEFAULT '-',
     transfer_order_quality_issue TEXT DEFAULT '-',
-    substandard_qty INTEGER DEFAULT 0 CHECK (substandard_qty >= 0),   
+    transfer_order_shortage TEXT DEFAULT '-',
+    substandard_qty INTEGER DEFAULT 0 CHECK (substandard_qty >= 0),
+    shortage_qty INTEGER DEFAULT 0 CHECK (shortage_qty >= 0),
     arrival_date DATE CHECK (arrival_date IS NULL OR strftime('%Y-%m-%d', arrival_date) = arrival_date),
     current_action TEXT CHECK (current_action IN ('post', 'confirm') OR current_action IS NULL),
     good_receipt_date DATE CHECK (good_receipt_date IS NULL OR strftime('%Y-%m-%d', good_receipt_date) = good_receipt_date),
@@ -167,8 +169,8 @@ CREATE TABLE shop (
     shop_name_nxt TEXT DEFAULT '-',
     district TEXT DEFAULT '-',
     default_box_pullback INTEGER DEFAULT 0 CHECK (default_box_pullback >= 0),
-    pullback_schedule INTEGER DEFAULT 1 CHECK (pullback_schedule IN (0, 1)),
-    
+    pullback_schedule INTEGER DEFAULT 0 CHECK (pullback_schedule IN (0, 1)),
+    is_generic INTEGER NOT NULL DEFAULT 0 CHECK (is_generic IN (0, 1)),
     FOREIGN KEY (brand) REFERENCES brand(brand_code)
         ON UPDATE CASCADE,
     FOREIGN KEY (province_id) REFERENCES province(province_id)

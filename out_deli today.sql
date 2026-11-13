@@ -16,7 +16,8 @@ SELECT
     paper_bag_qty,
     passed_qc_qty,
     failed_qc_qty,
-    order_qty as SL_order
+    order_qty as SL_order,
+    one_off_event
     FROM outbound
 	WHERE delivery_date = date('now')
 	ORDER BY shop_code ASC;

@@ -7,6 +7,7 @@ PRAGMA foreign_keys = OFF;
 PRAGMA foreign_keys = ON;
 PRAGMA foreign_keys;
 PRAGMA foreign_key_check;
+PRAGMA integrity_check;
 PRAGMA foreign_key_list('item_zsta');
 CREATE UNIQUE INDEX IF NOT EXISTS idx_inbound_purchase_order_num_unique ON inbound(purchase_order_num);
 
@@ -188,7 +189,7 @@ ALTER TABLE shop DROP COLUMN pullback_schedule;
 ALTER TABLE shop ADD COLUMN pullback_schedule INTEGER DEFAULT 0 CHECK (pullback_schedule IN (0, 1));
 
 -- export sample data
-SELECT 'SELECT * FROM (SELECT * FROM "' || name || '" ORDER BY id DESC LIMIT 200) ORDER BY id;'
+SELECT 'SELECT * FROM (SELECT * FROM "' || name || '" ORDER BY id DESC LIMIT 500) ORDER BY id;'
 FROM sqlite_master WHERE type = 'table'  AND name NOT LIKE 'sqlite_%';
 
 
