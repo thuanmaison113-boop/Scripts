@@ -1,23 +1,2 @@
-SELECT
-	id,
-	delivery_date as ngày_yêu_cầu_giao,
-	post_date as ngày_post,
-	checklist,
-	brand_name as nhãn,
-	shop_code as mã_shop,
-    shop_name as tên_shop,
-    region as vùng,
-    stock_transfer_order_num as số_PO,
-    delivery_order_num as số_DO,
-    transfer_order_num,
-    note,
-    box_qty,
-    product_qty,
-    paper_bag_qty,
-    passed_qc_qty,
-    failed_qc_qty,
-    order_qty as SL_order,
-    one_off_event
-    FROM outbound
-	WHERE delivery_date = '2026-11-13'
-	ORDER BY shop_code ASC;
+INSERT INTO outbound_disparity (user_SAP, delivery_order_num, barcode, item_full_name, TO_num, pick_num, pack_num)
+VALUES ("MS62399","80243589","8887049623610","CK2-30160255-1, Glycine, S","10","10","9");

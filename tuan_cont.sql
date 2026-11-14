@@ -14,9 +14,9 @@ input_type AS Loại,
 purchase_order_num AS PO,
 delivery_order_num AS số_post,
 good_issue_date AS GI_date,
-arrival_date AS Arrival,
 current_action AS action,
-good_receipt_date AS GR_date
+good_receipt_date AS GR_date,
+arrival_date AS Arrival
 FROM inbound
 WHERE region = 'CONT'
 ORDER BY id DESC;
