@@ -225,3 +225,6 @@ SELECT "table", parent, COUNT(*) AS bad_rows
 FROM pragma_foreign_key_check
 WHERE "table" IN ('pullback', 'outbound_include', 'outbound_groupx')
 GROUP BY "table", parent;
+
+-- change character inside string
+UPDATE outbound_groupx SET shop_code = 'ONS ' || SUBSTR(shop_code, 5) WHERE shop_code LIKE 'ONR %';

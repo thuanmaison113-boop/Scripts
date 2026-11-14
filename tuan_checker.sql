@@ -20,4 +20,4 @@ order by id desc
 
 
 select * from item_list-- item list by style code
-where style_code = "CK2-30671820"
+where style_code = "CK3-71280619"

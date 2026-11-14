@@ -84,6 +84,19 @@ BEGIN
     FROM support_numbers
     WHERE n <= NEW.substandard_qty;
 END;
+CREATE TRIGGER inbound_add_defect_row_shortage
+AFTER UPDATE OF shortage_qty ON inbound
+FOR EACH ROW
+WHEN COALESCE(OLD.shortage_qty, 0) = 0
+     AND NEW.shortage_qty > 0
+BEGIN
+    INSERT INTO defect (purchase_order_num, defect_qty)
+    SELECT NEW.purchase_order_num, 1
+    FROM support_numbers
+    WHERE n <= NEW.shortage_qty;
+END;
+
+
 
 CREATE TABLE outbound (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -13,6 +13,7 @@ input_paper_bag,
 input_taras_defect,
 transfer_order_quality_issue AS TO_QI,
 substandard_qty AS QI_Qty,
+shortage_qty AS lost_qty,
 purchase_order_num AS STO,
 delivery_order_num AS DO,
 shop_name AS shop,
@@ -21,14 +22,13 @@ arrival_date
 FROM inbound  
 WHERE current_action IS NULL AND region <> 'CONT'
 AND purchase_order_num IN (
-4700535093,
-4700535141,
-4700535144,
-4700535146,
-4700535147,
-4700535176,
-4700535199,
-4700535208,
-4700535229
+4700534856,
+4700534989,
+4700535482,
+4700535715,
+4700535727,
+4700535760,
+4700535832
+
 
 );
