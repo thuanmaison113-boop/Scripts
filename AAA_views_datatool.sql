@@ -190,3 +190,30 @@ CROSS JOIN brand b
 LEFT JOIN brand_section bs ON bs.brand_code = b.brand_code
 WHERE g.is_generic = 1
   AND b.is_active = 1;
+
+CREATE VIEW data_tool_putaway_pending AS
+SELECT
+    put_away_bin                              AS batch,
+    shop_code,
+    shop_name,
+    box_qty,
+    NULLIF(input_standard, 0)                 AS product_qty,
+    NULLIF(input_taras_defect, 0)             AS taras_qty,
+    NULLIF(input_paper_bag, 0)                AS paper_qty,
+    NULLIF(input_visual_merchandising, 0)     AS vm_qty
+FROM inbound
+WHERE current_action = 'post'
+  AND status <> 'complete'
+ORDER BY put_away_bin, arrival_date, shop_name;
+
+CREATE VIEW data_tool_pda_phone_num AS
+SELECT
+    COALESCE(e.employee_full_name, p.assigned_user_name)    AS NV,
+    p.phone_number                                          AS pda_phone_number
+FROM pda_devices AS p
+LEFT JOIN employee AS e
+       ON e.employee_code = p.assigned_to
+WHERE p.assigned_to <> '-'
+  AND p.phone_number <> '-'
+  AND (e.end_date IS NULL OR e.end_date > date('now', 'localtime'))
+ORDER BY NV;

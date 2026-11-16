@@ -1,5 +1,5 @@
 Select * from inbound -- INBOUND BY SHOP CODE
-Where shop_code like '5802'
+Where shop_code like '1049'
 and inbound.input_taras_defect = 0 order by id desc;
 
 
@@ -10,10 +10,13 @@ INNER JOIN inbound i ON d.purchase_order_num = i.purchase_order_num
 WHERE i.shop_code = '1150' ORDER BY d.id DESC;
 
 
+SELECT * FROM defect d  -- DEFECT BY BARCODE
+where barcode = 8887049434551
+
 
 
 select * from defect -- defect by style code1 
-where style_code = "CK1-60280462"
+where style_code = "CK1-90360439"
 order by id desc
 
 
