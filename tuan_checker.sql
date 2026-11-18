@@ -1,5 +1,5 @@
 Select * from inbound -- INBOUND BY SHOP CODE
-Where shop_code like '1049'
+Where shop_code like '1143'
 and inbound.input_taras_defect = 0 order by id desc;
 
 
@@ -23,4 +23,4 @@ order by id desc
 
 
 select * from item_list-- item list by style code
-where style_code = "CK1-60280462"
+where style_code = "CK2-20151647"

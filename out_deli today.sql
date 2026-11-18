@@ -17,6 +17,7 @@ SELECT
     passed_qc_qty,
     failed_qc_qty,
     order_qty as SL_order,
+    note2,
     one_off_event
     FROM outbound
 	WHERE delivery_date = date('now')

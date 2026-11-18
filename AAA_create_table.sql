@@ -625,6 +625,7 @@ CREATE TABLE employee (
     motorbike_card_no TEXT DEFAULT '-',
     note TEXT DEFAULT '-',
     resignation_reason TEXT DEFAULT '-',
+    levels TEXT DEFAULT "C1",
     FOREIGN KEY (start_date) REFERENCES date_tb(Date),
     FOREIGN KEY (end_date) REFERENCES date_tb(Date)
 );
