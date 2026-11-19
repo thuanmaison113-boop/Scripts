@@ -1,61 +1,3 @@
-WM11109
-WM11122
-WM11108
-WM11112
-WM11102
-WM11111
-WM11113
-WM11120
-WM11121
-WM11110
-WM11104
-WM11115
-WM11101
-WM11106
-WM11107
-WM11114
-WM11116
-
-mã nhân viên có trong disparity nhưng ko có trong employee
-
-
-# DB clean-up — bad rows still open (v02)
-
-_2026-11-11 · from `PRAGMA foreign_key_check` on the DB copy refreshed 2026-11-11 20:20 (schema dump 20:39). Total 410 rows, integrity_check = ok._
-_Replaces `fk_cleanup_manual_list_v01.md` (2026-11-10, 572 rows). Task: T-68 (parked)._
-
-## Summary
-
-| # | Table → links to | Rows | Status |
-|---|---|---|---|
-| 1 | outbound_groupx → shop | 2 | Quick fix: `ONR` → `ONS` |
-| 2 | pda_devices → employee | 1 | Quick fix: '-' → NULL (new since 2026-11-10) |
-| 3 | outbound_disparity → outbound | 16 | By hand |
-| 4 | outbound_disparity → item_list | 2 | By hand (same rows as #3: ids 181, 637) |
-| 5 | defect → item_list | 7 | By hand |
-| 6 | defect → inbound | 1 | By hand |
-| 7 | item_zsta → item_list | 2 (1 row) | Decide: add item to item_list or delete row |
-| 8 | outbound_disparity → employee | 335 | **Decision needed** (store WM logins in employee, or drop the link) |
-| 9 | pullback → shop | 44 | Kept on purpose (decision 2026-11-10) |
-
-Without #8 and #9: 31 rows to fix. Fixed since 2026-11-10: asset_master dates (20), SOH total rows, 108 pullback.to_shop rows, 8 groupx codes, 3 defect PO numbers.
-
-## 1. outbound_groupx — code not in shop (2)
-
-| id | shop_code now | shop_name | should be |
-|---|---|---|---|
-| 227 | ONR D119 | KHO NVL Q7 | ONS D119 |
-| 243 | ONR 99M1 | ECOM QUẬN 8 | ONS 99M1 |
-
-Fix: `UPDATE outbound_groupx SET shop_code = 'ONS ' || SUBSTR(shop_code, 5) WHERE shop_code LIKE 'ONR %';`
-
-## 2. pda_devices — assigned_to not an employee (1)
-
-| id | device_code | serial_number | location | assigned_to |
-|---|---|---|---|---|
-| 36 | 9101033 | 20248B1E71 | D111 | - |
-
-Fix: `UPDATE pda_devices SET assigned_to = NULL WHERE assigned_to = '-';` (or the real employee code if the device is assigned)
 
 ## 3–4. outbound_disparity — DO not in outbound (16) / barcode not in item_list (2)
 
@@ -139,18 +81,6 @@ SAP logins `WM111xx` are not in `employee.user_SAP` (that column holds MS employ
 
 Options: (a) store the WM login in employee (13 clear matches; WM11102, WM11114, WM11122 have 2 matches, WM11109 has none), or (b) drop the foreign key (table rebuild, like the shop_new fix).
 
-## 9. pullback.to_shop — kept on purpose (44)
-
-| to_shop | rows |
-|---|---|
-| D111-TUIGIAY | 29 |
-|  | 6 |
-| D111-BT | 3 |
-| D116-TARAS | 2 |
-| D116 - TARAS | 1 |
-| D111-AEON BT  | 1 |
-| D111- AEON BÌNH TÂN | 1 |
-| D111 - Tuigiay | 1 |
 
 Kept as is (decision 2026-11-10). Editing these rows with `foreign_keys = ON` will be refused. The 6 empty ones have no destination at all.
 
@@ -160,51 +90,3 @@ Kept as is (decision 2026-11-10). Editing these rows with `foreign_keys = ON` wi
 
 
 
-
-4500239484
-4500239490
-4500239494
-4500239497
-4500239499
-4500239502
-4500239503
-4500239504
-4500239300
-4500239301
-4500239306
-4500239324
-
-2000213656
-2000213658
-2000213659
-2000213660
-2000213661
-2000213662
-2000213663
-2000213664
-2000213666
-2000213667
-2000213668
-2000213669
-
-SELECT *
-FROM outbound
-WHERE stock_transfer_order_num IN
-(
-4500239300,
-4500239301,
-4500239306,
-4500239332,
-4500239333,
-4500239334,
-4500239335,
-4500239336,
-4500239337,
-4500239338,
-4500239339,
-4500239340,
-4500239341,
-4500239342,
-4500239343
-
-)

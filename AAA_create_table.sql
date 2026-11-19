@@ -1306,6 +1306,7 @@ CREATE TABLE brand_section (
     FOREIGN KEY (brand_code) REFERENCES brand(brand_code)
         ON UPDATE CASCADE
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_brand_section_unique ON brand_section(multi_type);
 CREATE TRIGGER brand_section_insert_brand_name
 AFTER INSERT ON brand_section
 FOR EACH ROW
@@ -1516,3 +1517,35 @@ INSERT INTO carrier_zone_hcm (carier,zone_id,district) VALUES
 	 ('nhattin','KV4','BinhTan'),
 	 ('nhattin','KV5','AeonBinhDuong');
 
+CREATE TABLE support_bin_putaway (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    brand_code TEXT NOT NULL,
+    bin TEXT UNIQUE NOT NULL,
+    storage_type TEXT DEFAULT '-',
+    bin_section TEXT DEFAULT '-',
+    FOREIGN KEY (brand_code) REFERENCES brand(brand_code),
+    FOREIGN KEY (storage_type) REFERENCES storage_type(storage_type),
+    FOREIGN KEY (bin_section) REFERENCES storage_type(multi_type)
+);
+CREATE TRIGGER support_bin_putaway_update_add_section
+AFTER UPDATE OF brand_code ON support_bin_putaway
+FOR EACH ROW
+BEGIN
+    UPDATE support_bin_putaway
+    SET bin_section = COALESCE(
+        (	SELECT bs.multi_type
+            FROM brand_section bs
+            WHERE bs.brand_code = NEW.brand_code
+        ),
+        '-'
+    )
+    WHERE id = NEW.id;
+END;
+
+CREATE TABLE storage_type (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    storage_type TEXT UNIQUE NOT NULL,
+    section_type TEXT DEFAULT 'multi'
+        CHECK (section_type IN ('mono', 'multi')),
+    description TEXT
+);

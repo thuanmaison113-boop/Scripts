@@ -16,11 +16,11 @@ where barcode = 8887049434551
 
 
 select * from defect -- defect by style code1 
-where style_code = "CK1-90360439"
+where style_code = "CK1-70381205"
 order by id desc
 
 
 
 
 select * from item_list-- item list by style code
-where style_code = "CK2-20151647"
+where style_code = "CK1-70381205"

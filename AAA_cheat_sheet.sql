@@ -44,7 +44,7 @@ SELECT GROUP_CONCAT(name, ', ') AS column_list FROM PRAGMA_TABLE_INFO('brand');
 SELECT name || ',' AS column_name_with_comma FROM PRAGMA_TABLE_INFO('inbound');
 
 -------------------thêm dòng ảo để cân bằng báo cáo ngày
-INSERT INTO inbound (shop_code, good_issue_date,status,arrival_date,current_action, good_receipt_date) VALUES ('TEMP','2026-11-17', 'complete', '2026-11-17', 'confirm','2026-11-17');
+INSERT INTO inbound (shop_code, good_issue_date,status,arrival_date,current_action, good_receipt_date) VALUES ('TEMP','2026-11-18', 'complete', '2026-11-18', 'confirm','2026-11-18');
 INSERT INTO outbound (shop_code, post_date) VALUES ('TEMP', '2026-04-04');
 
 
