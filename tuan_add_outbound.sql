@@ -10,6 +10,6 @@ delivery_order_num,
 transfer_order_num,
 note,
 one_off_event,
-checklist,
+e_invoice,
 id
 FROM outbound ORDER BY id DESC LIMIT 1;

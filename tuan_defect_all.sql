@@ -11,6 +11,7 @@ SELECT
     d.solution AS hướng_xử_lý,
     d.note,
     d.checklist,
+    d.defect_bin,
     d.style_code,
     d.brand_name
 FROM defect d

@@ -11,6 +11,10 @@ PRAGMA integrity_check;
 PRAGMA foreign_key_list('item_zsta');
 CREATE UNIQUE INDEX IF NOT EXISTS idx_inbound_purchase_order_num_unique ON inbound(purchase_order_num);
 
+
+
+
+
 DELETE FROM item_export WHERE id NOT IN ( SELECT MAX(id) FROM item_export GROUP BY barcode) AND barcode IN ( SELECT barcode FROM item_export GROUP BY barcode HAVING COUNT(*) > 1 );
 DELETE FROM item_list;
 DELETE FROM sqlite_sequence WHERE name = 'item_list';

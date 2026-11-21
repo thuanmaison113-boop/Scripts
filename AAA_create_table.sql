@@ -121,6 +121,9 @@ CREATE TABLE outbound (
     note2 TEXT DEFAULT '-',
     checklist TEXT DEFAULT 0,
     one_off_event TEXT NOT NULL DEFAULT 'normal',
+    e_invoice TEXT DEFAULT '-',
+    picking_list_qty INTEGER DEFAULT 0 CHECK (picking_list_qty >= 0),
+    delivery_order_status TEXT NOT NULL DEFAULT 'pending' CHECK (delivery_order_status IN ('pending', 'process', 'complete', 'cancel')),
     FOREIGN KEY (one_off_event) REFERENCES one_off_event_type(event_code),
     FOREIGN KEY (shop_code) REFERENCES shop(shop_code),
     FOREIGN KEY (post_date) REFERENCES date_tb(Date),
@@ -144,7 +147,31 @@ BEGIN
         region = (SELECT p.region FROM province p JOIN shop s ON s.province_id = p.province_id WHERE s.shop_code = NEW.shop_code)
     WHERE rowid = NEW.rowid;
 END;
-
+CREATE TRIGGER outbound_do_status_complete
+AFTER UPDATE OF post_date ON outbound
+FOR EACH ROW
+WHEN NEW.post_date IS NOT NULL AND OLD.post_date IS NULL
+BEGIN
+    UPDATE outbound SET delivery_order_status = 'complete' WHERE id = NEW.id;
+END;
+CREATE TRIGGER outbound_do_status_process
+AFTER UPDATE OF product_qty, paper_bag_qty ON outbound
+FOR EACH ROW
+WHEN (NEW.product_qty <> 0 AND OLD.product_qty = 0)
+  OR (NEW.paper_bag_qty <> 0 AND OLD.paper_bag_qty = 0)
+BEGIN
+    UPDATE outbound SET delivery_order_status = 'process' WHERE id = NEW.id;
+END;
+CREATE TRIGGER outbound_do_status_cancel
+AFTER UPDATE OF product_qty, paper_bag_qty ON outbound
+FOR EACH ROW
+WHEN NEW.post_date IS NOT NULL
+ AND NEW.product_qty = 0
+ AND NEW.paper_bag_qty = 0
+ AND (OLD.product_qty <> 0 OR OLD.paper_bag_qty <> 0)
+BEGIN
+    UPDATE outbound SET delivery_order_status = 'cancel' WHERE id = NEW.id;
+END;
 
 
 CREATE TABLE a_diary (
@@ -244,6 +271,7 @@ CREATE TABLE defect (
     style_code TEXT,
     checklist TEXT DEFAULT '-',
     brand_name TEXT DEFAULT '-',
+    defect_bin TEXT DEFAULT '-',
     FOREIGN KEY (purchase_order_num) REFERENCES inbound(purchase_order_num)
         ON UPDATE CASCADE,
     FOREIGN KEY (barcode) REFERENCES item_list(barcode)
@@ -1520,25 +1548,28 @@ INSERT INTO carrier_zone_hcm (carier,zone_id,district) VALUES
 CREATE TABLE support_bin_putaway (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     brand_code TEXT NOT NULL,
-    bin TEXT UNIQUE NOT NULL,
-    storage_type TEXT DEFAULT '-',
-    bin_section TEXT DEFAULT '-',
+    bin TEXT NOT NULL,
+    storage_type TEXT,
+    bin_section TEXT,
+    site TEXT,
+    description TEXT,
     FOREIGN KEY (brand_code) REFERENCES brand(brand_code),
-    FOREIGN KEY (storage_type) REFERENCES storage_type(storage_type),
-    FOREIGN KEY (bin_section) REFERENCES storage_type(multi_type)
+    FOREIGN KEY (storage_type) REFERENCES storage_type(storage_type)
 );
 CREATE TRIGGER support_bin_putaway_update_add_section
 AFTER UPDATE OF brand_code ON support_bin_putaway
 FOR EACH ROW
 BEGIN
     UPDATE support_bin_putaway
-    SET bin_section = COALESCE(
-        (	SELECT bs.multi_type
-            FROM brand_section bs
-            WHERE bs.brand_code = NEW.brand_code
-        ),
-        '-'
-    )
+    SET bin_section = COALESCE((SELECT bs.multi_type FROM brand_section bs WHERE bs.brand_code = NEW.brand_code), '-')
+    WHERE id = NEW.id;
+END;
+CREATE TRIGGER support_bin_putaway_insert_add_section
+AFTER INSERT ON support_bin_putaway
+FOR EACH ROW
+BEGIN
+    UPDATE support_bin_putaway
+    SET bin_section = COALESCE((SELECT bs.multi_type FROM brand_section bs WHERE bs.brand_code = NEW.brand_code), '-')
     WHERE id = NEW.id;
 END;
 

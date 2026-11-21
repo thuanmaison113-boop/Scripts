@@ -1,51 +1,57 @@
 CREATE VIEW data_tool_outbound_deli_today AS
-SELECT 
+SELECT
     o.shop_code,
     o.shop_name,
-    o.delivery_order_num as do_num,
+    o.delivery_order_num AS do_num,
     o.note,
     o.box_qty,
-    g.groupx
+    g.groupx,
+    CASE WHEN s.carrier IS NULL OR TRIM(s.carrier) IN ('', '-') THEN 'other' ELSE s.carrier END AS carrier_code
 FROM outbound AS o
 LEFT JOIN outbound_groupx AS g
     ON o.shop_code = g.shop_code
+LEFT JOIN "shop" AS s
+    ON o.shop_code = s.shop_code
 WHERE o.delivery_date = DATE('now')
 ORDER BY g.groupx, o.shop_name ASC;
 
+CREATE VIEW data_tool_outbound_include_today AS
+SELECT
+    i.shop_code,
+    s.shop_name,
+    i.note AS do_num,
+    i.item_name AS note,
+    i.box_qty AS box_qty,
+    g.groupx,
+    CASE WHEN s.carrier IS NULL OR TRIM(s.carrier) IN ('', '-') THEN 'other' ELSE s.carrier END AS carrier_code
+FROM outbound_include AS i
+LEFT JOIN outbound_groupx AS g
+    ON i.shop_code = g.shop_code
+LEFT JOIN "shop" AS s
+    ON i.shop_code = s.shop_code
+WHERE i.dely_date = DATE('now')
+ORDER BY g.groupx, i.shop_code, s.shop_name ASC;
+
 CREATE VIEW data_tool_pullback_today AS
-SELECT 
-  p.to_shop as shop_code,
-  s.shop_name,
-  '-' as do_num,
-  'zLCNB' AS note,
-  SUM(p.box_qty) AS box_qty,
-  g.groupx
+SELECT
+    p.to_shop AS shop_code,
+    s.shop_name,
+    '-' AS do_num,
+    'zLCNB' AS note,
+    SUM(p.box_qty) AS box_qty,
+    g.groupx,
+    CASE WHEN s.carrier IS NULL OR TRIM(s.carrier) IN ('', '-') THEN 'other' ELSE s.carrier END AS carrier_code
 FROM pullback AS p
 LEFT JOIN outbound_groupx AS g
-  ON p.to_shop = g.shop_code
+    ON p.to_shop = g.shop_code
 LEFT JOIN "shop" AS s
-  ON p.to_shop = s.shop_code
+    ON p.to_shop = s.shop_code
 WHERE p.pullback_date = DATE('now')
   AND p.to_shop NOT LIKE '%D111%'
   AND p.to_shop NOT LIKE '%D116%'
-GROUP BY p.to_shop, s.shop_name, g.groupx
+GROUP BY p.to_shop, s.shop_name, g.groupx, s.carrier
 ORDER BY g.groupx, p.to_shop, s.shop_name ASC;
 
-CREATE VIEW data_tool_outbound_include_today AS
-SELECT 
-i.shop_code,
-s.shop_name,
-i.note as do_num,
-i.item_name AS note,
-i.box_qty as box_qty,
-g.groupx
-FROM outbound_include as i
-LEFT JOIN outbound_groupx AS g
-  ON i.shop_code = g.shop_code
-LEFT JOIN "shop" AS s
-  ON i.shop_code = s.shop_code
-WHERE i.dely_date = DATE('now')
-ORDER BY g.groupx, i.shop_code, s.shop_name ASC;
 
 CREATE VIEW data_tool_inbound_online AS
 SELECT
