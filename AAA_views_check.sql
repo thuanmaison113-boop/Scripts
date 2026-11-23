@@ -11,7 +11,6 @@ WHERE one_off_event IS NOT NULL
   AND one_off_event NOT IN (SELECT event_code FROM one_off_event_type)
 GROUP BY one_off_event;
 
-
 CREATE VIEW vw_check_inbound_expected_arrival_unresolved AS
 SELECT activity, shop_region, brand_name, COUNT(*) AS rows_unscheduled
 FROM vw_pbi_inbound_expected_arrival
@@ -19,7 +18,6 @@ WHERE arrival_date IS NULL
   AND arrival_date_status = 'Unscheduled'
 GROUP BY activity, shop_region, brand_name
 ORDER BY rows_unscheduled DESC;
-
 
 CREATE VIEW vw_check_plan_closed_day AS
  SELECT p.source, p.plan_type, p.brand_code, p.delivery_date, SUM(p.qty) AS qty_dropped
@@ -47,7 +45,6 @@ UNION ALL
 SELECT o.shop_code
 FROM outbound o
 WHERE NOT EXISTS ( SELECT 1 FROM shop s WHERE s.shop_code = o.shop_code);
-
 
 CREATE VIEW vw_check_shop_code_not_in_shop_groupx AS
 SELECT s.shop_code,
@@ -86,3 +83,41 @@ CREATE VIEW vw_check_connection_all_table AS
 SELECT "table", parent, COUNT(*) AS bad_rows
 FROM pragma_foreign_key_check
 GROUP BY "table", parent ORDER BY bad_rows DESC;
+
+CREATE VIEW vw_check_do_status_wrong AS
+SELECT id,
+       delivery_order_num,
+       transfer_order_num,
+       shop_code,
+       order_date,
+       delivery_date,
+       post_date,
+       product_qty,
+       paper_bag_qty,
+       delivery_order_status,
+       expected_status,
+       CASE
+           WHEN delivery_order_status = 'complete' AND post_date IS NULL THEN 'complete but no post_date (post_date cleared?)'
+           WHEN delivery_order_status = 'process' AND post_date IS NULL
+                AND IFNULL(product_qty, 0) = 0 AND IFNULL(paper_bag_qty, 0) = 0 THEN 'process but both qty 0 (cancelled before posting, or old row)'
+           WHEN delivery_order_status = 'process' AND post_date IS NOT NULL THEN 'process but posted (post_date set)'
+           WHEN delivery_order_status = 'pending' AND post_date IS NOT NULL THEN 'pending but posted (post_date set)'
+           WHEN delivery_order_status = 'pending' THEN 'pending but qty filled'
+           WHEN delivery_order_status = 'cancel' THEN 'cancel but qty filled or not posted'
+           ELSE 'complete but both qty 0'
+       END AS issue
+FROM (
+    SELECT o.*,
+           CASE
+               WHEN o.post_date IS NOT NULL AND (IFNULL(o.product_qty, 0) > 0 OR IFNULL(o.paper_bag_qty, 0) > 0) THEN 'complete'
+               WHEN o.post_date IS NOT NULL THEN 'cancel'
+               WHEN IFNULL(o.product_qty, 0) > 0 OR IFNULL(o.paper_bag_qty, 0) > 0 THEN 'process'
+               ELSE 'pending'
+           END AS expected_status
+    FROM outbound o
+) x
+WHERE delivery_order_status <> expected_status;
+
+
+
+

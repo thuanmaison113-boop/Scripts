@@ -6,7 +6,7 @@ PRAGMA legacy_alter_table = ON;
 PRAGMA foreign_keys = OFF;
 PRAGMA foreign_keys = ON;
 PRAGMA foreign_keys;
-PRAGMA foreign_key_check;
+PRAGMA foreign_key_check; -- tìm lỗi foreign key
 PRAGMA integrity_check;
 PRAGMA foreign_key_list('item_zsta');
 CREATE UNIQUE INDEX IF NOT EXISTS idx_inbound_purchase_order_num_unique ON inbound(purchase_order_num);
@@ -42,7 +42,7 @@ UPDATE inbound SET one_off_event = LOWER(TRIM(one_off_event)) WHERE one_off_even
 INSERT INTO inbound_new SELECT * FROM inbound;
 
 -- GET COLUMN LIST HORIZONTALLY
-SELECT GROUP_CONCAT(name, ', ') AS column_list FROM PRAGMA_TABLE_INFO('brand');
+SELECT GROUP_CONCAT(name, ', ') AS column_list FROM PRAGMA_TABLE_INFO('inbound_old');
 
 -- GET COLUMN LIST VERTICALLY 
 SELECT name || ',' AS column_name_with_comma FROM PRAGMA_TABLE_INFO('inbound');
@@ -50,6 +50,18 @@ SELECT name || ',' AS column_name_with_comma FROM PRAGMA_TABLE_INFO('inbound');
 -------------------thêm dòng ảo để cân bằng báo cáo ngày
 INSERT INTO inbound (shop_code, good_issue_date,status,arrival_date,current_action, good_receipt_date) VALUES ('TEMP','2026-11-18', 'complete', '2026-11-18', 'confirm','2026-11-18');
 INSERT INTO outbound (shop_code, post_date) VALUES ('TEMP', '2026-04-04');
+
+-- fix dòng bị sai DO status
+UPDATE outbound
+SET delivery_order_status = CASE
+        WHEN post_date IS NOT NULL AND (IFNULL(product_qty, 0) > 0 OR IFNULL(paper_bag_qty, 0) > 0) THEN 'complete'
+        WHEN post_date IS NOT NULL THEN 'cancel'
+        WHEN IFNULL(product_qty, 0) > 0 OR IFNULL(paper_bag_qty, 0) > 0 THEN 'process'
+        ELSE 'pending'
+    END
+WHERE id IN (SELECT id FROM vw_check_do_status_wrong);
+
+
 
 
 UPDATE item_material SET material = REPLACE(material, 'Thành phần: ', '') WHERE material LIKE '%Thành phần: %';
@@ -199,9 +211,14 @@ FROM sqlite_master WHERE type = 'table'  AND name NOT LIKE 'sqlite_%';
 
 
 -- fix shop_new problem
-PRAGMA foreign_keys = OFF;
-PRAGMA legacy_alter_table = ON;
+PRAGMA foreign_keys = OFF; -- vô hiệu hóa check foreign key, for rebuild/ insert/ delete
+
+PRAGMA legacy_alter_table = ON; -- ngăn chặn đổi tên bảng ảnh hưởng tới trigger và view
+
 ALTER TABLE pullback RENAME TO pullback_old;
+
+SELECT GROUP_CONCAT(name, ', ') AS column_list FROM PRAGMA_TABLE_INFO('pullback_old');
+
 CREATE TABLE "pullback" (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     pullback_date DATE NOT NULL CHECK (strftime('%Y-%m-%d', pullback_date) = pullback_date),
@@ -217,10 +234,13 @@ CREATE TABLE "pullback" (
         ON UPDATE CASCADE,
     FOREIGN KEY (pullback_date) REFERENCES date_tb(Date)
 );
+
 INSERT INTO pullback (id, pullback_date, from_shop, to_shop, box_qty, product, paper_bag, note)
 SELECT id, pullback_date, from_shop, to_shop, box_qty, product, paper_bag, note FROM pullback_old;
+
 UPDATE sqlite_sequence SET seq = (SELECT seq FROM sqlite_sequence WHERE name = 'pullback_old')
 WHERE name = 'pullback' AND (SELECT seq FROM sqlite_sequence WHERE name = 'pullback_old') > seq;
+
 DROP TABLE pullback_old;
 
 

@@ -16,7 +16,8 @@ SELECT
     paper_bag_qty,
     passed_qc_qty,
     failed_qc_qty,
-    order_qty as SL_order,
+    order_qty,
+    picking_list_qty,
     note2,
     one_off_event
     FROM outbound
