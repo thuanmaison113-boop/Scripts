@@ -47,11 +47,10 @@ LEFT JOIN outbound_groupx AS g
 LEFT JOIN "shop" AS s
     ON p.to_shop = s.shop_code
 WHERE p.pullback_date = DATE('now')
-  AND p.to_shop NOT LIKE '%D111%'
-  AND p.to_shop NOT LIKE '%D116%'
+  AND p.to_shop NOT LIKE '%' || (SELECT main_site FROM site_info) || '%'
+  AND p.to_shop NOT LIKE '%' || IFNULL((SELECT taras_site FROM site_info), '~') || '%'
 GROUP BY p.to_shop, s.shop_name, g.groupx, s.carrier
 ORDER BY g.groupx, p.to_shop, s.shop_name ASC;
-
 
 CREATE VIEW data_tool_inbound_online AS
 SELECT
@@ -118,8 +117,6 @@ note
 FROM inbound
 WHERE good_receipt_date is null AND region <> 'CONT';
 
-
-
 CREATE VIEW vw_zdata_item_list AS
 SELECT
     e.id,
@@ -174,14 +171,14 @@ SELECT
     employee_full_name,
     employee_code
 FROM employee
-WHERE end_date IS NULL AND main_site_code = 'D111' And is_direct_labor = 1;
+WHERE end_date IS NULL AND main_site_code = (SELECT main_site FROM site_info) And is_direct_labor = 1;
 
 CREATE VIEW data_tool_web_app_login AS
 SELECT employee_code      AS username,
        employee_full_name AS display_name,
        phone_number
 FROM employee
-WHERE end_date IS NULL AND main_site_code = "D111"
+WHERE end_date IS NULL AND main_site_code = (SELECT main_site FROM site_info)
   AND employee_code IS NOT NULL AND TRIM(employee_code) <> '';
 
 CREATE VIEW data_tool_shop_code_map AS
@@ -223,3 +220,20 @@ WHERE p.assigned_to <> '-'
   AND p.phone_number <> '-'
   AND (e.end_date IS NULL OR e.end_date > date('now', 'localtime'))
 ORDER BY NV;
+
+CREATE VIEW IF NOT EXISTS data_tool_brand_section_code AS
+SELECT TRIM(section_code) AS section_code, brand_code, brand_name, goods_type
+FROM (
+    SELECT multi_type AS section_code, brand_code, brand_name, 'multi' AS goods_type FROM brand_section
+    UNION ALL SELECT shoe AS section_code, brand_code, brand_name, 'shoe' AS goods_type FROM brand_section
+    UNION ALL SELECT bag AS section_code, brand_code, brand_name, 'bag' AS goods_type FROM brand_section
+    UNION ALL SELECT wallet AS section_code, brand_code, brand_name, 'wallet' AS goods_type FROM brand_section
+    UNION ALL SELECT vmr AS section_code, brand_code, brand_name, 'vmr' AS goods_type FROM brand_section
+    UNION ALL SELECT sandal AS section_code, brand_code, brand_name, 'sandal' AS goods_type FROM brand_section
+    UNION ALL SELECT uniform AS section_code, brand_code, brand_name, 'uniform' AS goods_type FROM brand_section
+    UNION ALL SELECT gwp AS section_code, brand_code, brand_name, 'gwp' AS goods_type FROM brand_section
+    UNION ALL SELECT paper_bag AS section_code, brand_code, brand_name, 'paper_bag' AS goods_type FROM brand_section
+    UNION ALL SELECT clothes AS section_code, brand_code, brand_name, 'clothes' AS goods_type FROM brand_section
+    UNION ALL SELECT strap AS section_code, brand_code, brand_name, 'strap' AS goods_type FROM brand_section
+)
+WHERE section_code IS NOT NULL AND TRIM(section_code) NOT IN ('', '-');

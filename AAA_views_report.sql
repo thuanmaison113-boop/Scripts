@@ -205,3 +205,42 @@ SELECT stock_transfer_order_num,
     COUNT(*) AS duplicate_count
 FROM outbound GROUP BY stock_transfer_order_num HAVING COUNT(*) > 1;
 
+CREATE VIEW vw_report_daily_diff_in_out_last_date AS
+SELECT 
+    brand,
+    MAX(date) AS date,
+    SUM(main_in - main_out) AS main_balance,
+    SUM(taras_in - taras_out) AS taras_balance,
+    SUM(paperbag_in - paperbag_out) AS paperbag_balance
+FROM (
+    SELECT 
+        i.good_receipt_date AS date, 
+        b.brand_name AS brand, 
+        SUM(i.input_standard + i.input_visual_merchandising) AS main_in,
+        0 AS main_out,
+        SUM(i.input_taras_defect) AS taras_in, 
+        0 AS taras_out,
+        SUM(i.input_paper_bag) AS paperbag_in,
+        0 AS paperbag_out
+    FROM inbound i
+    LEFT JOIN "shop" s ON i.shop_code = s.shop_code
+    LEFT JOIN brand b ON s.brand = b.brand_code
+    WHERE i.good_receipt_date = (SELECT MAX(good_receipt_date) FROM inbound)
+    GROUP BY b.brand_name
+    UNION ALL
+    SELECT 
+        o.post_date AS date, 
+        b.brand_name AS brand, 
+        0 AS main_in,
+        SUM(CASE WHEN o.main_vendor = (SELECT main_site FROM site_info) THEN o.product_qty ELSE 0 END) AS main_out,
+        0 AS taras_in,
+        SUM(CASE WHEN o.main_vendor = (SELECT taras_site FROM site_info) THEN o.product_qty ELSE 0 END) AS taras_out,
+        0 AS paperbag_in,
+        SUM(o.paper_bag_qty) AS paperbag_out
+    FROM outbound o
+    LEFT JOIN "shop" s ON o.shop_code = s.shop_code
+    LEFT JOIN brand b ON s.brand = b.brand_code
+    WHERE o.post_date = (SELECT MAX(post_date) FROM outbound)
+    GROUP BY b.brand_name
+) AS combined
+GROUP BY brand;

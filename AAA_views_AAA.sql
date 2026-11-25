@@ -97,7 +97,7 @@ order_qty as số_lượng,
 delivery_order_num as số_DO,
 note
 FROM outbound
-WHERE post_date is null and main_vendor = 'D111'
+WHERE post_date is null and main_vendor = (SELECT main_site FROM site_info)
 ORDER BY shop_code;
 
 CREATE VIEW AAA_cont_job AS
@@ -207,7 +207,7 @@ SELECT
     employee_full_name,
     employee_short_name
 FROM employee
-WHERE end_date IS NULL
+WHERE end_date IS NULL AND main_site_code = (SELECT main_site FROM site_info)
   AND employee_code NOT IN (
       SELECT employee_code
       FROM employee_leave
@@ -372,7 +372,7 @@ ORDER BY d.id DESC;
 CREATE VIEW AAA_Delidate_NULL  AS
 SELECT *
 FROM outbound
-WHERE delivery_date is NULL AND main_vendor <> 'D116';
+WHERE delivery_date is NULL AND main_vendor IS NOT (SELECT taras_site FROM site_info);
 
 CREATE VIEW AAA_inbound_pending AS
 SELECT
@@ -484,8 +484,8 @@ t AS (
     LEFT JOIN province p        ON s.province_id = p.province_id
     LEFT JOIN carrier c         ON s.carrier = c.carrier_code
     WHERE p1.pullback_date = DATE('now')
-      AND p1.to_shop NOT LIKE '%D111%'
-      AND p1.to_shop NOT LIKE '%D116%'
+      AND p1.to_shop NOT LIKE '%' || (SELECT main_site FROM site_info) || '%'
+      AND p1.to_shop NOT LIKE '%' || IFNULL((SELECT taras_site FROM site_info), '~') || '%'
       AND p.region = 'province'
     GROUP BY p1.to_shop, s.shop_name, b.brand_name, g.groupx, s.lead_time_day,
              c.name, c.tracking_url, c.contact_name, c.contact_phone
@@ -551,8 +551,7 @@ SELECT
     employee_full_name,
     employee_short_name
 FROM employee
-WHERE end_date IS NULL AND main_site_code = 'D111';
-
+WHERE end_date IS NULL AND main_site_code = (SELECT main_site FROM site_info);
 
 
 

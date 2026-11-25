@@ -19,6 +19,7 @@ purchase_order_num,
 delivery_order_num,
 shop_name,
 good_issue_date,
+inbound_code,
 arrival_date
 FROM inbound  
 WHERE current_action IS NULL AND region <> 'CONT'

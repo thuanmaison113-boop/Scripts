@@ -360,7 +360,7 @@ CREATE TABLE carrier_area (
     carrier TEXT,
 	area_code TEXT,
 	province_name TEXT,
-	province_id TEXT,
+	province_id INTEGER,
 	FOREIGN KEY (carrier) REFERENCES carrier(carrier_code),
 	FOREIGN KEY (province_id) REFERENCES province(province_id)
 );
@@ -1581,4 +1581,37 @@ CREATE TABLE storage_type (
     section_type TEXT DEFAULT 'multi'
         CHECK (section_type IN ('mono', 'multi')),
     description TEXT
+);
+
+CREATE TABLE outbound_status_history (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    outbound_id        INTEGER NOT NULL,
+    delivery_order_num TEXT    NOT NULL,
+    old_status         TEXT    NOT NULL CHECK (old_status IN ('pending', 'process', 'complete', 'cancel')),
+    new_status         TEXT    NOT NULL CHECK (new_status IN ('pending', 'process', 'complete', 'cancel')),
+    changed_at         TEXT    NOT NULL DEFAULT (datetime('now', '+7 hours')),
+    FOREIGN KEY (outbound_id) REFERENCES outbound(id) ON DELETE CASCADE
+);
+CREATE INDEX ix_outbound_status_history_outbound ON outbound_status_history (outbound_id);
+CREATE INDEX ix_outbound_status_history_time     ON outbound_status_history (changed_at);
+CREATE TRIGGER outbound_status_history_log
+AFTER UPDATE OF delivery_order_status ON outbound
+FOR EACH ROW
+WHEN NEW.delivery_order_status IS NOT OLD.delivery_order_status
+BEGIN
+    INSERT INTO outbound_status_history (outbound_id, delivery_order_num, old_status, new_status)
+    VALUES (NEW.id, NEW.delivery_order_num, OLD.delivery_order_status, NEW.delivery_order_status);
+END;
+
+CREATE TABLE site_info (
+    id            INTEGER PRIMARY KEY CHECK (id = 1),
+    site_code     TEXT NOT NULL UNIQUE,
+    site_name     TEXT NOT NULL,
+    main_site     TEXT NOT NULL,
+    taras_site    TEXT,
+    warehouse_no  TEXT NOT NULL,
+    address       TEXT DEFAULT '-',
+    note          TEXT DEFAULT '-',
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now', '+7 hours')),
+    CHECK (warehouse_no = substr(main_site, -3))
 );
