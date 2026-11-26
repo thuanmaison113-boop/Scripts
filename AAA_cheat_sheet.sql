@@ -13,8 +13,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_inbound_purchase_order_num_unique ON inbou
 
 
 
-
-
 DELETE FROM item_export WHERE id NOT IN ( SELECT MAX(id) FROM item_export GROUP BY barcode) AND barcode IN ( SELECT barcode FROM item_export GROUP BY barcode HAVING COUNT(*) > 1 );
 DELETE FROM item_list;
 DELETE FROM sqlite_sequence WHERE name = 'item_list';
@@ -37,9 +35,6 @@ DELETE FROM soh_taras WHERE COALESCE(barcode, '') = '' AND COALESCE(article_numb
 UPDATE outbound SET one_off_event = LOWER(TRIM(one_off_event)) WHERE one_off_event IS NOT NULL AND one_off_event <> LOWER(TRIM(one_off_event));
 UPDATE inbound SET one_off_event = LOWER(TRIM(one_off_event)) WHERE one_off_event IS NOT NULL AND one_off_event <> LOWER(TRIM(one_off_event));
 
-
-
-INSERT INTO inbound_new SELECT * FROM inbound;
 
 -- GET COLUMN LIST HORIZONTALLY
 SELECT GROUP_CONCAT(name, ', ') AS column_list FROM PRAGMA_TABLE_INFO('inbound_old');

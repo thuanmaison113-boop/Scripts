@@ -19,6 +19,7 @@ SELECT
     order_qty,
     picking_list_qty,
     note2,
+    e_invoice,
     one_off_event
     FROM outbound
 	WHERE delivery_date = date('now')

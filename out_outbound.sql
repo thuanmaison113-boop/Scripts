@@ -6,6 +6,7 @@ o.paper_bag_qty,
 o.delivery_order_num as DO ,
 o.transfer_order_num as TO_,
 o.picking_list_qty,
+o.order_qty,
 o.delivery_date as date,
 o.shop_name,
 o.shop_code,
@@ -18,7 +19,8 @@ id
 FROM outbound o
 where o.transfer_order_num in (
 --where delivery_order_num in (
-2000213762
+2000214565
+
 
 
 

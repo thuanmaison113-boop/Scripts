@@ -213,6 +213,7 @@ CREATE TABLE shop (
     default_box_pullback INTEGER DEFAULT 0 CHECK (default_box_pullback >= 0),
     pullback_schedule INTEGER DEFAULT 0 CHECK (pullback_schedule IN (0, 1)),
     is_generic INTEGER NOT NULL DEFAULT 0 CHECK (is_generic IN (0, 1)),
+    groupx TEXT DEFAULT '100',
     FOREIGN KEY (brand) REFERENCES brand(brand_code)
         ON UPDATE CASCADE,
     FOREIGN KEY (province_id) REFERENCES province(province_id)
@@ -1615,3 +1616,44 @@ CREATE TABLE site_info (
     updated_at    TEXT NOT NULL DEFAULT (datetime('now', '+7 hours')),
     CHECK (warehouse_no = substr(main_site, -3))
 );
+
+CREATE TABLE IF NOT EXISTS outbound_team (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_code   TEXT    NOT NULL UNIQUE,
+    team_name   TEXT    NOT NULL DEFAULT '-',
+    is_active   INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    note        TEXT    NOT NULL DEFAULT '-',
+    created_at  TEXT    DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS outbound_team_member (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_code     TEXT NOT NULL REFERENCES outbound_team (team_code),
+    employee_code TEXT NOT NULL REFERENCES employee (employee_code),
+    member_role   TEXT NOT NULL DEFAULT 'pick_pack' CHECK (member_role IN ('pick', 'pack', 'pick_pack')),
+    from_date     DATE NOT NULL DEFAULT (DATE('now')),
+    to_date       DATE,
+    note          TEXT NOT NULL DEFAULT '-'
+);
+CREATE INDEX IF NOT EXISTS ix_outbound_team_member_emp ON outbound_team_member (employee_code);
+
+CREATE TABLE IF NOT EXISTS outbound_to_team (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    transfer_order_num TEXT NOT NULL,
+    team_code          TEXT NOT NULL REFERENCES outbound_team (team_code),
+    assigned_at        TEXT NOT NULL, 
+    assigned_by        TEXT NOT NULL,
+    removed_at         TEXT, 
+    removed_by         TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_outbound_to_team_to ON outbound_to_team (transfer_order_num);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_outbound_to_team_now ON outbound_to_team (transfer_order_num, team_code) WHERE removed_at IS NULL;
+
+-- Example: fill your teams (change the codes / employee codes, then run):
+-- INSERT INTO outbound_team (team_code, team_name) VALUES ('T01', 'Team 1'), ('T02', 'Team 2'), ('P01', 'Pullback small TO');
+-- INSERT INTO outbound_team_member (team_code, employee_code, member_role) VALUES
+--   ('T01', 'MSxxxxx', 'pick'), ('T01', 'MSyyyyy', 'pack'), ('P01', 'MSzzzzz', 'pick_pack');
+-- Someone leaves a team: UPDATE outbound_team_member SET to_date = DATE('now') WHERE team_code = 'T01' AND employee_code = 'MSxxxxx' AND to_date IS NULL;
+
+-- Check after running:
+-- SELECT name FROM sqlite_master WHERE name LIKE 'outbound_t%';

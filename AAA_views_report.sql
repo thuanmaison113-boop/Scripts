@@ -170,7 +170,6 @@ FROM (
 ) AS combined
 GROUP BY brand;
 
-
 CREATE VIEW outbound_compare_2025_2026_CK AS
 SELECT
     strftime('%m',delivery_date ) AS month,
